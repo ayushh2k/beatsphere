@@ -1,6 +1,12 @@
+// app/_layout.tsx
+
 import { SplashScreen, Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
+import { View } from "react-native";
+import { Buffer } from 'buffer';
+
+global.Buffer = Buffer;
 
 SplashScreen.preventAutoHideAsync();
 
