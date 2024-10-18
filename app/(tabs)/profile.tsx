@@ -5,6 +5,7 @@ import { Text, View, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { refreshAccessToken } from '../../utils/spotifyAuth';
 import { SpotifyUser } from '../../types/spotify';
 import { router } from 'expo-router';
@@ -19,11 +20,23 @@ const Profile = () => {
       const accessToken = await SecureStore.getItemAsync('spotify_access_token');
       if (accessToken) {
         try {
+          // Check if user info is cached in AsyncStorage
+          const cachedUserInfo = await AsyncStorage.getItem('spotify_user_info');
+          if (cachedUserInfo) {
+            setUserInfo(JSON.parse(cachedUserInfo));
+            setLoading(false);
+            return;
+          }
+
           const response = await axios.get<SpotifyUser>('https://api.spotify.com/v1/me', {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
             },
           });
+
+          // Cache the user info in AsyncStorage
+          await AsyncStorage.setItem('spotify_user_info', JSON.stringify(response.data));
+
           setUserInfo(response.data);
         } catch (error: unknown) {
           if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -50,8 +63,14 @@ const Profile = () => {
   }, []);
 
   const handleLogout = async () => {
+    // Clear the stored tokens
     await SecureStore.deleteItemAsync('spotify_access_token');
     await SecureStore.deleteItemAsync('spotify_refresh_token');
+
+    // Invalidate the cached user info
+    await AsyncStorage.removeItem('spotify_user_info');
+
+    // Navigate to the login screen
     router.replace('/');
   };
 
