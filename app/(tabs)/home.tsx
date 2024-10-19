@@ -1,51 +1,102 @@
 // app/(tabs)/home.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { refreshAccessToken } from '../../utils/spotifyAuth';
-import { SpotifyUser } from '../../types/spotify';
+import { getCurrentlyPlayingTrack } from '../../utils/lastFmAuth';
+
+interface LastFmUser {
+  name: string;
+  image: {
+    '#text': string;
+  }[];
+}
+
+interface LastFmTrack {
+  name: string;
+  artist: {
+    '#text': string;
+  };
+  album: {
+    '#text': string;
+  };
+  image: {
+    '#text': string;
+    size: string;
+  }[];
+  '@attr'?: {
+    nowplaying: string;
+  };
+}
 
 const Home = () => {
-  const [userInfo, setUserInfo] = useState<SpotifyUser | null>(null);
+  const [userInfo, setUserInfo] = useState<LastFmUser | null>(null);
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<LastFmTrack | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchCurrentlyPlayingTrack = async () => {
+    const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
+    const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+    const username = await SecureStore.getItemAsync('lastfm_username');
+
+    if (sessionKey && username) {
+      try {
+        const currentlyPlayingTrack = await getCurrentlyPlayingTrack(lastfmApiKey, sessionKey, username);
+        console.log('Currently Playing Track:', currentlyPlayingTrack);
+        setCurrentlyPlaying(currentlyPlayingTrack);
+      } catch (error) {
+        console.error('Failed to fetch currently playing track:', error);
+      }
+    } else {
+      setError('Last.fm session key or username is missing');
+    }
+  };
 
   useEffect(() => {
-    const fetchUserInfo = async () => {
-      const accessToken = await SecureStore.getItemAsync('spotify_access_token');
-      if (accessToken) {
+    const fetchData = async () => {
+      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+      const username = await SecureStore.getItemAsync('lastfm_username');
+
+      if (sessionKey && username) {
         try {
-          const response = await axios.get<SpotifyUser>('https://api.spotify.com/v1/me', {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
-          setUserInfo(response.data);
-        } catch (error: unknown) {
-          if (axios.isAxiosError(error) && error.response?.status === 401) {
-            const newAccessToken = await refreshAccessToken();
-            if (newAccessToken) {
-              fetchUserInfo();
-            } else {
-              setError('Failed to refresh access token');
-            }
-          } else {
-            console.error('Failed to fetch user info:', error);
-            setError('Failed to fetch user info');
+          // Fetch user info
+          const userResponse = await fetch(
+            `http://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=${lastfmApiKey}&sk=${sessionKey}&format=json`
+          );
+          if (!userResponse.ok) {
+            throw new Error('Failed to fetch user info');
           }
+          const userData = await userResponse.json();
+          setUserInfo(userData.user);
+
+          // Fetch currently playing track
+          await fetchCurrentlyPlayingTrack();
+
+          // Set up interval to fetch currently playing track every few minutes
+          intervalRef.current = setInterval(fetchCurrentlyPlayingTrack, 2 * 60 * 1000); // 2 minutes
+        } catch (error) {
+          console.error('Failed to fetch data:', error);
+          setError('Failed to fetch data');
         } finally {
           setLoading(false);
         }
       } else {
-        setError('Access token is missing');
+        setError('Last.fm session key or username is missing');
         setLoading(false);
       }
     };
 
-    fetchUserInfo();
+    fetchData();
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, []);
 
   if (loading) {
@@ -68,19 +119,30 @@ const Home = () => {
     <SafeAreaView className="bg-primary flex-1 items-center justify-center">
       {userInfo ? (
         <View className="items-center">
-          <Image
-            source={{ uri: userInfo.images[0].url }}
-            className="w-32 h-32 rounded-full mb-4"
-          />
-          <Text className="text-xl font-aregular color-green mb-2">
-            {userInfo.display_name}
+          <Text className="text-xl font-aregular color-green mb-4">
+            Welcome, {userInfo.name}!
           </Text>
-          <Text className="text-lg font-aregular color-green">
-            {userInfo.email}
-          </Text>
-          <Text className="text-lg items-center justify-center font-aregular color-green">
-            {userInfo.external_urls.spotify}
-          </Text>
+          {currentlyPlaying ? (
+            <View className="items-center">
+              {currentlyPlaying.image.find(img => img.size === 'extralarge') ? (
+                <Image
+                  // @ts-ignore
+                  source={{ uri: currentlyPlaying.image.find(img => img.size === 'extralarge')['#text'] }} // Use the appropriate image size
+                  className="w-32 h-32 rounded-full mb-4"
+                />
+              ) : (
+                <Text className="text-xl font-aregular color-green">No image available</Text>
+              )}
+              <Text className="text-xl font-aregular color-green mb-2">
+                Currently Playing: {currentlyPlaying.name}
+              </Text>
+              <Text className="text-lg font-aregular color-green">
+                By: {currentlyPlaying.artist['#text']}
+              </Text>
+            </View>
+          ) : (
+            <Text className="text-xl font-aregular color-green">No track is currently playing</Text>
+          )}
         </View>
       ) : (
         <Text className="text-xl font-aregular color-green">No user info available</Text>

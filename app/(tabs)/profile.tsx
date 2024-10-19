@@ -1,60 +1,59 @@
 // app/(tabs)/profile.tsx
 
 import React, { useEffect, useState } from 'react';
-import { Text, View, Image, TouchableOpacity } from 'react-native';
+import { Text, View, Image, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { refreshAccessToken } from '../../utils/spotifyAuth';
-import { SpotifyUser } from '../../types/spotify';
+import { getUserInfo } from '../../utils/lastFmAuth';
 import { router } from 'expo-router';
 
+interface LastFmUser {
+  name: string;
+  image: {
+    '#text': string;
+    size: string;
+  }[];
+  url: string;
+  country: string;
+  playcount: string;
+}
+
 const Profile = () => {
-  const [userInfo, setUserInfo] = useState<SpotifyUser | null>(null);
+  const [userInfo, setUserInfo] = useState<LastFmUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserInfo = async () => {
-      const accessToken = await SecureStore.getItemAsync('spotify_access_token');
-      if (accessToken) {
+      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+      const username = await SecureStore.getItemAsync('lastfm_username');
+
+      if (sessionKey && username) {
         try {
           // Check if user info is cached in AsyncStorage
-          const cachedUserInfo = await AsyncStorage.getItem('spotify_user_info');
+          const cachedUserInfo = await AsyncStorage.getItem('lastfm_user_info');
           if (cachedUserInfo) {
             setUserInfo(JSON.parse(cachedUserInfo));
             setLoading(false);
             return;
           }
 
-          const response = await axios.get<SpotifyUser>('https://api.spotify.com/v1/me', {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
+          const userInfo = await getUserInfo(lastfmApiKey, sessionKey);
 
           // Cache the user info in AsyncStorage
-          await AsyncStorage.setItem('spotify_user_info', JSON.stringify(response.data));
+          await AsyncStorage.setItem('lastfm_user_info', JSON.stringify(userInfo));
 
-          setUserInfo(response.data);
+          setUserInfo(userInfo);
         } catch (error: unknown) {
-          if (axios.isAxiosError(error) && error.response?.status === 401) {
-            const newAccessToken = await refreshAccessToken();
-            if (newAccessToken) {
-              fetchUserInfo();
-            } else {
-              setError('Failed to refresh access token');
-            }
-          } else {
-            console.error('Failed to fetch user info:', error);
-            setError('Failed to fetch user info');
-          }
+          console.error('Failed to fetch user info:', error);
+          setError('Failed to fetch user info');
         } finally {
           setLoading(false);
         }
       } else {
-        setError('Access token is missing');
+        setError('Last.fm session key or username is missing');
         setLoading(false);
       }
     };
@@ -63,14 +62,11 @@ const Profile = () => {
   }, []);
 
   const handleLogout = async () => {
-    // Clear the stored tokens
-    await SecureStore.deleteItemAsync('spotify_access_token');
-    await SecureStore.deleteItemAsync('spotify_refresh_token');
+    await SecureStore.deleteItemAsync('lastfm_session_key');
+    await SecureStore.deleteItemAsync('lastfm_username');
 
-    // Invalidate the cached user info
-    await AsyncStorage.removeItem('spotify_user_info');
+    await AsyncStorage.removeItem('lastfm_user_info');
 
-    // Navigate to the login screen
     router.replace('/');
   };
 
@@ -95,17 +91,18 @@ const Profile = () => {
       {userInfo ? (
         <View className="items-center">
           <Image
-            source={{ uri: userInfo.images[0].url }}
+            // @ts-ignore
+            source={{ uri: userInfo.image.find(img => img.size === 'extralarge')['#text'] }}
             className="w-32 h-32 rounded-full mb-4"
           />
           <Text className="text-xl font-aregular color-green mb-2">
-            {userInfo.display_name}
+            {userInfo.name}
           </Text>
           <Text className="text-lg font-aregular color-green">
-            {userInfo.email}
+            Playcount: {userInfo.playcount}
           </Text>
-          <Text className="text-lg items-center justify-center font-aregular color-green">
-            {userInfo.external_urls.spotify}
+          <Text className="text-lg font-aregular color-green">
+            <Text className="underline" onPress={() => Linking.openURL(userInfo.url)}>{userInfo.url}</Text>
           </Text>
           <TouchableOpacity
             onPress={handleLogout}
