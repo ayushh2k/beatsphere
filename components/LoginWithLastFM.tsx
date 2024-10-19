@@ -1,4 +1,4 @@
-// components/LoginWithSpotify.tsx
+// components/LoginWithLastFM.tsx
 
 import React, { useEffect } from 'react';
 import { TouchableOpacity, Text, Linking } from 'react-native';
@@ -6,11 +6,11 @@ import * as SecureStore from 'expo-secure-store';
 import { getMobileSession, getUserInfo } from '../utils/lastFmAuth';
 import { router } from 'expo-router';
 
-interface LoginWithSpotifyProps {
+interface LoginWithLastFMProps {
   containerStyle?: string;
 }
 
-export default function LoginWithSpotify({ containerStyle }: LoginWithSpotifyProps) {
+export default function LoginWithLastFM({ containerStyle }: LoginWithLastFMProps) {
   const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
   const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret'; // Provide a fallback value
   const redirectUri = 'exp://192.168.15.200:8081'; // Replace with your correct redirect URI
@@ -31,10 +31,14 @@ export default function LoginWithSpotify({ containerStyle }: LoginWithSpotifyPro
 
           // Fetch user info after getting the session key
           const userInfo = await getUserInfo(apiKey, sessionKey);
-          // console.log('User Info:', userInfo);
+          console.log('User Info:', userInfo);
 
           // Store the username securely
           await SecureStore.setItemAsync('lastfm_username', userInfo.name);
+
+          // Store the user's Last.fm image securely
+          const userImageUrl = userInfo.image.find((img: { size: string; }) => img.size === 'large')['#text'];
+          await SecureStore.setItemAsync('lastfm_user_image', userImageUrl);
 
           router.replace('/home');
         } catch (error) {
