@@ -45,7 +45,7 @@ const Home = () => {
     if (sessionKey && username) {
       try {
         const currentlyPlayingTrack = await getCurrentlyPlayingTrack(lastfmApiKey, sessionKey, username);
-        console.log('Currently Playing Track:', currentlyPlayingTrack);
+        // console.log('Currently Playing Track:', currentlyPlayingTrack);
         setCurrentlyPlaying(currentlyPlayingTrack);
       } catch (error) {
         console.error('Failed to fetch currently playing track:', error);

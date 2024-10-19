@@ -31,7 +31,7 @@ export default function LoginWithSpotify({ containerStyle }: LoginWithSpotifyPro
 
           // Fetch user info after getting the session key
           const userInfo = await getUserInfo(apiKey, sessionKey);
-          console.log('User Info:', userInfo);
+          // console.log('User Info:', userInfo);
 
           // Store the username securely
           await SecureStore.setItemAsync('lastfm_username', userInfo.name);
