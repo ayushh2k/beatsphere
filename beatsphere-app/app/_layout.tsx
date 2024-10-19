@@ -41,7 +41,7 @@ export default function RootLayout() {
     }}>
       <Stack.Screen options={
         {
-          title: 'Beat Sphere 🌎',
+          title: 'Beat Sphere',
         }
       } name='index' />
     </Stack>
