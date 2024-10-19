@@ -1,6 +1,6 @@
 // app/index.tsx
 
-import { Text, View } from "react-native";
+import { ImageBackground, Text, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "../global.css";
@@ -29,11 +29,13 @@ export default function Index() {
   }
 
   return (
-    <SafeAreaView className="bg-primary h-full">
+       <ImageBackground source={require('../assets/images/bg.png')} resizeMode="cover">
+    <SafeAreaView className="h-full">
       <View className="w-full h-full min-h-[85vh] px-8 flex-1 items-center justify-center">
         <StatusBar style="light" />
-        <LoginWithLastFM containerStyle="w-full mt-7" />
+        <LoginWithLastFM />
       </View>
     </SafeAreaView>
+      </ImageBackground>
   );
 }
