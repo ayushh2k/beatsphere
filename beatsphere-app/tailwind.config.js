@@ -9,7 +9,7 @@ module.exports = {
         primary: "#121212",
         buttonRed: "#D92323",
         green:{
-          DEFAULT: "#1ED760"
+          DEFAULT: "#D92323"
         }
       },
       fontFamily: {
