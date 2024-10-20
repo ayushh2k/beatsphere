@@ -4,7 +4,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
-import { getCurrentlyPlayingTrack } from '../../utils/lastFmAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentlyPlayingTrack } from '../../utils/lastFmHelpers';
 
 interface LastFmUser {
   name: string;
@@ -76,8 +77,8 @@ const Home = () => {
           // Fetch currently playing track
           await fetchCurrentlyPlayingTrack();
 
-          // Set up interval to fetch currently playing track every few minutes
-          intervalRef.current = setInterval(fetchCurrentlyPlayingTrack, 2 * 60 * 1000); // 2 minutes
+          // Set up interval to fetch currently playing track every 30 seconds
+          intervalRef.current = setInterval(fetchCurrentlyPlayingTrack, 15 * 1000); // 30 seconds
         } catch (error) {
           console.error('Failed to fetch data:', error);
           setError('Failed to fetch data');

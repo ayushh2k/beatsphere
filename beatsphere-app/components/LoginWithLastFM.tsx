@@ -3,7 +3,8 @@
 import React, { useEffect } from 'react';
 import { TouchableOpacity, Text, Linking } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { getMobileSession, getUserInfo } from '../utils/lastFmAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMobileSession, getUserInfo } from '../utils/lastFmHelpers';
 import { router } from 'expo-router';
 
 interface LoginWithLastFMProps {
@@ -39,6 +40,9 @@ export default function LoginWithLastFM({ containerStyle }: LoginWithLastFMProps
           // Store the user's Last.fm image securely
           const userImageUrl = userInfo.image.find((img: { size: string; }) => img.size === 'large')['#text'];
           await SecureStore.setItemAsync('lastfm_user_image', userImageUrl);
+
+          // Store the user's Last.fm profile URL in AsyncStorage
+          await AsyncStorage.setItem('lastfm_profile_url', userInfo.url);
 
           router.replace('/home');
         } catch (error) {

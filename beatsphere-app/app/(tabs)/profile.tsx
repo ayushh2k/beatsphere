@@ -5,7 +5,7 @@ import { Text, View, Image, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUserInfo } from '../../utils/lastFmAuth';
+import { getUserInfo } from '../../utils/lastFmHelpers';
 import { router } from 'expo-router';
 
 interface LastFmUser {

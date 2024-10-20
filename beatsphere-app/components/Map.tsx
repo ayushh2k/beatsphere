@@ -1,134 +1,209 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+// components/Map.tsx
+
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, Text, AppState, AppStateStatus } from 'react-native';
+import MapView from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import CustomMarker from './CustomMarker';
+import MapCluster from 'react-native-map-clustering';
 import axios from 'axios';
 import mapStyle from '../utils/mapStyle.json';
-import * as SecureStore from 'expo-secure-store';
-import CustomMarker from './CustomMarker';
+import EventSource from 'react-native-event-source'; // Use react-native-event-source
+import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
+
+const BACKEND_URL = 'http://192.168.15.200:3000'; // Your backend URL
 
 interface UserLocation {
   id: string;
   name: string;
   latitude: number;
   longitude: number;
-  imageUrl?: string; // Make imageUrl optional
+  imageUrl?: string | null; // Allow null
+  currentlyPlaying?: {
+    name: string;
+    artist: {
+      '#text': string;
+    };
+    album: {
+      '#text': string;
+    };
+    image: {
+      '#text': string;
+      size: string;
+    }[];
+  } | null;
+  lastfmProfileUrl?: string;
+  username?: string;
 }
-
-const backendUrl = 'http://192.168.15.200:3000'; // Externalize this
 
 const Map = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [otherUsers, setOtherUsers] = useState<UserLocation[]>([]);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const mapRef = useRef(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
+  // Initialize SSE connection
+  const initializeSSE = async () => {
+    const userId = await SecureStore.getItemAsync('lastfm_username');
+    if (!userId) return;
+
+    // Close existing connection if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    // Create new SSE connection
+    const eventSource = new EventSource(`${BACKEND_URL}/api/locations/stream`);
+
+    eventSource.addEventListener('message', (event) => {
+      if (event.data) {
+        const locations: UserLocation[] = JSON.parse(event.data);
+        setOtherUsers(locations.filter(location => 
+          location.id !== userId && location.currentlyPlaying
+        ));
+      }
+    });
+
+    eventSource.addEventListener('error', (error) => {
+      console.error('SSE Error:', error);
+      eventSource.close();
+      // Attempt to reconnect after 5 seconds
+      setTimeout(initializeSSE, 5000);
+    });
+
+    eventSourceRef.current = eventSource;
+  };
+
+  // Handle app state changes
   useEffect(() => {
-    const fetchUserLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access location was denied');
-        setLocationPermissionDenied(true);
-        return;
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App has come to foreground
+        initializeSSE();
+        startLocationWatch();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App has gone to background
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+        }
+        if (locationWatchRef.current) {
+          locationWatchRef.current.remove();
+        }
       }
+      appStateRef.current = nextAppState;
+    });
 
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-
-      // Fetch user ID and image URL from SecureStore
-      const storedUserId = await SecureStore.getItemAsync('lastfm_username');
-      const storedUserImage = await SecureStore.getItemAsync('lastfm_user_image');
-
-      if (storedUserId) {
-        setUserId(storedUserId);
-      }
-
-      setUserLocation({
-        id: storedUserId || 'currentUser',
-        name: 'You',
-        latitude,
-        longitude,
-        imageUrl: storedUserImage || '', // Set the image URL here
-      });
-
-      // Send user location to the backend
-      try {
-        await axios.post(`${backendUrl}/api/location`, {
-          id: storedUserId || 'currentUser',
-          latitude,
-          longitude,
-          imageUrl: storedUserImage || '', // Include image URL in the request
-        });
-
-        // Fetch other users' locations
-        const response = await axios.get(`${backendUrl}/api/locations`);
-        setOtherUsers(response.data);
-      } catch (error) {
-        console.error('Error fetching or sending location data:', error);
-      }
+    return () => {
+      subscription.remove();
     };
-
-    fetchUserLocation();
   }, []);
 
+  // Start watching location
+  const startLocationWatch = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setLocationPermissionDenied(true);
+      return;
+    }
+
+    const userId = await SecureStore.getItemAsync('lastfm_username');
+    const userImage = await SecureStore.getItemAsync('lastfm_user_image');
+    const lastfmProfileUrl = await AsyncStorage.getItem('lastfm_profile_url'); // Fetch the profile URL from AsyncStorage
+    
+    if (!userId) return;
+
+    locationWatchRef.current = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 30000, // 30 seconds
+        distanceInterval: 10, // 10 meters
+      },
+      async (location) => {
+        const { latitude, longitude } = location.coords;
+
+        // Fetch currently playing track and user info
+        const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+        if (!sessionKey) {
+          console.error('Session key is null');
+          return;
+        }
+
+        const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
+        const userInfo = await getUserInfo(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey);
+
+        console.log('Currently Playing:', currentlyPlaying);
+        console.log('User Info:', userInfo);
+
+        const locationData = {
+          id: userId,
+          name: userId,
+          latitude,
+          longitude,
+          imageUrl: userImage || undefined, // Ensure it's a string or undefined
+          currentlyPlaying: currentlyPlaying,
+          lastfmProfileUrl: lastfmProfileUrl || undefined, // Use the fetched profile URL
+          username: userInfo.name,
+        };
+
+        setUserLocation(locationData);
+
+        // Only send location if user is playing music
+        if (currentlyPlaying) {
+          try {
+            await axios.post(`${BACKEND_URL}/api/location`, locationData);
+          } catch (error) {
+            console.error('Failed to update location:', error);
+          }
+        }
+      }
+    );
+  };
+
+  // Listen for changes in currently playing track
   useEffect(() => {
-    const watchLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access location was denied');
-        setLocationPermissionDenied(true);
+    const checkCurrentlyPlaying = async () => {
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+      const userId = await SecureStore.getItemAsync('lastfm_username');
+      if (!sessionKey || !userId) {
+        console.error('Session key or user ID is null');
         return;
       }
 
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000, // Update every 5 seconds
-          distanceInterval: 10, // Update every 10 meters
-        },
-        async (location) => {
-          const { latitude, longitude } = location.coords;
-
-          // Fetch user ID and image URL from SecureStore
-          const storedUserId = await SecureStore.getItemAsync('lastfm_username');
-          const storedUserImage = await SecureStore.getItemAsync('lastfm_user_image');
-
-          if (storedUserId) {
-            setUserId(storedUserId);
-          }
-
-          setUserLocation({
-            id: storedUserId || 'currentUser',
-            name: 'You',
-            latitude,
-            longitude,
-            imageUrl: storedUserImage || '', // Set the image URL here
-          });
-
-          // Send updated location to the backend
-          try {
-            await axios.post(`${backendUrl}/api/location`, {
-              id: storedUserId || 'currentUser',
-              latitude,
-              longitude,
-              imageUrl: storedUserImage || '', // Include image URL in the request
-            });
-
-            // Fetch updated other users' locations
-            const response = await axios.get(`${backendUrl}/api/locations`);
-            setOtherUsers(response.data);
-          } catch (error) {
-            console.error('Error fetching or sending location data:', error);
-          }
-        }
-      );
-
-      return () => {
-        subscription.remove();
-      };
+      const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
+      if (userLocation) {
+        setUserLocation(prev => ({
+          ...prev!,
+          currentlyPlaying: currentlyPlaying,
+        }));
+      }
     };
 
-    watchLocation();
+    const interval = setInterval(checkCurrentlyPlaying, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [userLocation]);
+
+  // Initialize everything
+  useEffect(() => {
+    initializeSSE();
+    startLocationWatch();
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+      if (locationWatchRef.current) {
+        locationWatchRef.current.remove();
+      }
+    };
   }, []);
 
   if (locationPermissionDenied) {
@@ -141,7 +216,8 @@ const Map = () => {
 
   return (
     <View style={styles.container}>
-      <MapView
+      <MapCluster
+        ref={mapRef}
         style={styles.map}
         customMapStyle={mapStyle}
         showsCompass={false}
@@ -153,14 +229,18 @@ const Map = () => {
           longitudeDelta: 0.0421,
         }}
       >
-        {userLocation && (
+        {userLocation && userLocation.currentlyPlaying && (
           <CustomMarker
             coordinate={{
               latitude: userLocation.latitude,
               longitude: userLocation.longitude,
             }}
-            title={userLocation.name}
+            title={`${userLocation.name} - ${userLocation.currentlyPlaying.name} by ${userLocation.currentlyPlaying.artist['#text']}`}
+            //@ts-ignore
             imageUrl={userLocation.imageUrl}
+            currentlyPlaying={userLocation.currentlyPlaying}
+            lastfmProfileUrl={userLocation.lastfmProfileUrl}
+            username={userLocation.username}
           />
         )}
         {otherUsers.map((user) => (
@@ -170,11 +250,15 @@ const Map = () => {
               latitude: user.latitude,
               longitude: user.longitude,
             }}
-            title={user.name}
+            title={`${user.name} - ${user.currentlyPlaying?.name} by ${user.currentlyPlaying?.artist['#text']}`}
+            //@ts-ignore
             imageUrl={user.imageUrl}
+            currentlyPlaying={user.currentlyPlaying}
+            lastfmProfileUrl={`https://www.last.fm/user/${user.id}`}
+            username={user.name}
           />
         ))}
-      </MapView>
+      </MapCluster>
     </View>
   );
 };

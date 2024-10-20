@@ -5,10 +5,12 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Kafka, Partitioners } = require('kafkajs');
 const dotenv = require('dotenv');
+const { PassThrough } = require('stream');
 
 dotenv.config();
 
 const app = express();
+const clients = new Set();
 const port = process.env.PORT || 3000;
 const kafkaBrokers = process.env.KAFKA_BROKERS.split(',');
 
@@ -19,6 +21,13 @@ const kafka = new Kafka({
   clientId: 'beat-sphere',
   brokers: kafkaBrokers,
 });
+
+// Helper function to send events to all connected clients
+const sendEventsToAll = (locations) => {
+  clients.forEach(client => {
+    client.write(`data: ${JSON.stringify(locations)}\n\n`);
+  });
+};
 
 const producer = kafka.producer({
   createPartitioner: Partitioners.LegacyPartitioner,
@@ -41,7 +50,7 @@ const run = async () => {
       eachMessage: async ({ topic, partition, message }) => {
         const location = JSON.parse(message.value.toString());
         console.log(`Received location: ${JSON.stringify(location)}`);
-
+        
         // Update or add the user's location
         const existingIndex = userLocations.findIndex(loc => loc.id === location.id);
         if (existingIndex !== -1) {
@@ -49,6 +58,9 @@ const run = async () => {
         } else {
           userLocations.push(location);
         }
+    
+        // Send updates to all connected clients
+        sendEventsToAll(userLocations);
       },
     });
   } catch (error) {
@@ -58,18 +70,39 @@ const run = async () => {
 
 run().catch(console.error);
 
+app.get('/api/locations/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const stream = new PassThrough();
+  clients.add(stream);
+
+  // Send initial data
+  stream.write(`data: ${JSON.stringify(userLocations)}\n\n`);
+
+  // Remove client on connection close
+  req.on('close', () => {
+    clients.delete(stream);
+    stream.end();
+  });
+
+  stream.pipe(res);
+});
+
 app.post('/api/location', async (req, res) => {
   try {
-    const { id, latitude, longitude, imageUrl, name } = req.body;
+    const { id, latitude, longitude, imageUrl, name, currentlyPlaying } = req.body;
     const newLocation = {
       id,
-      name: name || 'User', // Use provided name or default to 'User'
+      name: name || 'User',
       latitude,
       longitude,
-      imageUrl: imageUrl || undefined, // If imageUrl is not provided, it will be undefined
+      imageUrl: imageUrl || undefined,
+      currentlyPlaying: currentlyPlaying || null,
     };
 
-    // Send location data to Kafka
     await producer.send({
       topic: 'user_locations',
       messages: [
@@ -78,6 +111,9 @@ app.post('/api/location', async (req, res) => {
         },
       ],
     });
+
+    // Send immediate update to all clients
+    sendEventsToAll(userLocations);
 
     res.status(201).send(newLocation);
   } catch (error) {
