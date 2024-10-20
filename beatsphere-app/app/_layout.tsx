@@ -3,7 +3,6 @@
 import { SplashScreen, Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
-import { View } from "react-native";
 import { Buffer } from 'buffer';
 
 global.Buffer = Buffer;
@@ -31,6 +30,7 @@ export default function RootLayout() {
       headerStyle: {
         backgroundColor: '#121212',
       },
+      headerShown: false,
       headerTintColor: '#ffff',
       headerTitleAlign: 'center',
       headerTitleStyle: {
