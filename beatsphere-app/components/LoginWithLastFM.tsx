@@ -1,20 +1,16 @@
 // components/LoginWithLastFM.tsx
 
 import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, Linking } from 'react-native';
+import { TouchableOpacity, Text, Linking, ImageBackground, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { getMobileSession, getUserInfo } from '../utils/lastFmAuth';
 import { router } from 'expo-router';
 
-interface LoginWithLastFMProps {
-  containerStyle?: string;
-}
 
-export default function LoginWithLastFM({ containerStyle }: LoginWithLastFMProps) {
+export default function LoginWithLastFM() {
   const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
   const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret'; // Provide a fallback value
-  const redirectUri = 'exp://192.168.15.200:8081'; // Replace with your correct redirect URI
-
+  const redirectUri = 'exp://192.168.15.201:8081'; // Replace with your correct redirect URI
   const handleLogin = async () => {
     const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(redirectUri)}`;
     Linking.openURL(authUrl);
@@ -62,11 +58,16 @@ export default function LoginWithLastFM({ containerStyle }: LoginWithLastFMProps
   }, []);
 
   return (
+    <View>
     <TouchableOpacity
-      onPress={handleLogin}
-      className={`bg-green rounded-md justify-center items-center px-4 py-2 text-white ${containerStyle}`}
+    onPress={handleLogin}
+    className={`bg-buttonRed rounded-md justify-center items-center px-4 py-2 text-white`}
     >
       <Text className="text-white font-aregular text-lg">Login with Last.fm</Text>
     </TouchableOpacity>
+    <Text className='text-white font-aregular text-md text-center mt-4'>
+      Here's how you can connect <Text className='color-green-400'  onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}>Spotify</Text> to Last.FM.
+    </Text>
+      </View>
   );
 }
