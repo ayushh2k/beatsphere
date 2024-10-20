@@ -1,8 +1,10 @@
 // components/CustomMarker.tsx
 
+import { router } from 'expo-router';
 import React from 'react';
 import { View, Image, StyleSheet, Text, Linking } from 'react-native';
-import { Marker, Callout } from 'react-native-maps';
+import { Marker, Callout, CalloutPressEvent } from 'react-native-maps';
+import {Svg, Image as ImageSvg} from 'react-native-svg';
 
 interface CustomMarkerProps {
   coordinate: {
@@ -54,6 +56,10 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
     }
   };
 
+  function handleCalloutPress(event: CalloutPressEvent): void {
+    router.push("/chat")
+  }
+
   return (
     <Marker coordinate={coordinate} title={title}>
       <View style={styles.markerContainer}>
@@ -61,34 +67,29 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
           <Image source={{ uri: imageUrl }} style={styles.markerImage} />
         )}
       </View>
-      <Callout>
+      <Callout  onPress={handleCalloutPress}>
         <View style={styles.calloutContainer}>
           <Text style={styles.calloutTitle}>{username}</Text>
           {currentlyPlaying ? (
             <>
               <Text style={styles.calloutSubtitle}>
-                Currently Playing: {currentlyPlaying.name}
+                {currentlyPlaying.name}
               </Text>
               <Text style={styles.calloutSubtitle}>
-                By: {currentlyPlaying.artist['#text']}
+                {currentlyPlaying.artist['#text']}
               </Text>
-              <Image
-                source={{ uri: extralargeImageUrl }}
-                style={styles.calloutImage}
-                onError={(e) => {
-                  console.error('Image load error:', e);
-                  // Use fallback image on error
-                  // e.currentTarget.source = { uri: fallbackImage };
-                }}
-              />
-              {lastfmProfileUrl && (
-                <Text
-                  style={styles.calloutLink}
-                  onPress={() => handleOpenURL(lastfmProfileUrl)}
-                >
-                  View on Last.fm
-                </Text>
-              )}
+              <Svg width={180} height={110}>
+                <ImageSvg
+                  href={{ uri: extralargeImageUrl }}
+                  width={'100%'}
+                  height={'100%'}
+                  preserveAspectRatio="xMidYMid slice"
+                // style={styles.calloutImage}
+                />
+              </Svg>
+              <Text style={styles.calloutLink}>
+                Tap to chat
+              </Text>
             </>
           ) : (
             <Text>No track is currently playing</Text>
@@ -109,22 +110,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   markerImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 35,
+    height: 35,
+    borderRadius: 17
   },
   calloutContainer: {
     width: 200,
+    // height: 700,
     padding: 10,
   },
   calloutTitle: {
     fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 5,
+    fontSize: 10,
+    marginBottom: 0,
+    textAlign: 'center',
   },
   calloutSubtitle: {
-    fontSize: 14,
-    marginBottom: 10,
+    fontSize: 8,
+    marginBottom: 2,
+    textAlign: 'center',
   },
   calloutImage: {
     width: 100,
@@ -134,7 +138,9 @@ const styles = StyleSheet.create({
   },
   calloutLink: {
     color: 'blue',
-    textDecorationLine: 'underline',
+    textAlign: 'center',
+    marginTop: 5,
+    fontSize: 10,
   },
 });
 
