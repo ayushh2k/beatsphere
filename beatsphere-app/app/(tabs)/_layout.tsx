@@ -1,7 +1,5 @@
 // app/(tabs)/_layout.tsx
-
-import { Tabs, Redirect } from 'expo-router'
-import { Text, View } from 'react-native'
+import { Tabs, Redirect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import "../../global.css";
 
@@ -11,7 +9,6 @@ const TabsLayout = () => {
       <Tabs screenOptions={{
         tabBarShowLabel: false,
         tabBarActiveTintColor: '#1ED760',
-        // tabBarInactiveTintColor: '',
         tabBarStyle: {
           backgroundColor: '#121212',
           borderTopWidth: 1,
@@ -47,10 +44,14 @@ const TabsLayout = () => {
             <Ionicons name="person-outline" size={24} color={color} />
           )
         }} />
-
+        {/* Hide the [id] route from the navigation menu */}
+        <Tabs.Screen name="chat/[id]" options={{
+          href: null,
+          headerShown: false, // Hide the header for the [id] route
+        }} />
       </Tabs>
     </>
-  )
-}
+  );
+};
 
-export default TabsLayout
+export default TabsLayout;

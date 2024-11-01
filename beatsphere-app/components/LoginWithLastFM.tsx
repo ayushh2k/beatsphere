@@ -11,7 +11,7 @@ import { router } from 'expo-router';
 export default function LoginWithLastFM() {
   const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
   const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret'; // Provide a fallback value
-  const redirectUri = 'exp://192.168.15.201:8081'; // Replace with your correct redirect URI
+  const redirectUri = 'exp://192.168.1.8:8081'; // Replace with your correct redirect URI
   const handleLogin = async () => {
     const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(redirectUri)}`;
     Linking.openURL(authUrl);

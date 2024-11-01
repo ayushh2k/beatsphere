@@ -13,7 +13,7 @@ import mapStyle from '../utils/mapStyle.json';
 import EventSource from 'react-native-event-source'; // Use react-native-event-source
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
 
-const BACKEND_URL = 'http://192.168.15.200:3000'; // Your backend URL
+const BACKEND_URL = 'http://192.168.1.8:3000'; // Your backend URL
 
 interface UserLocation {
   id: string;
@@ -72,7 +72,6 @@ const Map = () => {
     eventSource.addEventListener('error', (error) => {
       console.error('SSE Error:', error);
       eventSource.close();
-      // Attempt to reconnect after 5 seconds
       setTimeout(initializeSSE, 5000);
     });
 
@@ -108,63 +107,65 @@ const Map = () => {
 
   // Start watching location
   const startLocationWatch = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      setLocationPermissionDenied(true);
-      return;
-    }
-
-    const userId = await SecureStore.getItemAsync('lastfm_username');
-    const userImage = await SecureStore.getItemAsync('lastfm_user_image');
-    const lastfmProfileUrl = await AsyncStorage.getItem('lastfm_profile_url'); // Fetch the profile URL from AsyncStorage
-    
-    if (!userId) return;
-
-    locationWatchRef.current = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 30000, // 30 seconds
-        distanceInterval: 10, // 10 meters
-      },
-      async (location) => {
-        const { latitude, longitude } = location.coords;
-
-        // Fetch currently playing track and user info
-        const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-        if (!sessionKey) {
-          console.error('Session key is null');
-          return;
-        }
-
-        const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
-        const userInfo = await getUserInfo(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey);
-
-        console.log('Currently Playing:', currentlyPlaying);
-        console.log('User Info:', userInfo);
-
-        const locationData = {
-          id: userId,
-          name: userId,
-          latitude,
-          longitude,
-          imageUrl: userImage || undefined, // Ensure it's a string or undefined
-          currentlyPlaying: currentlyPlaying,
-          lastfmProfileUrl: lastfmProfileUrl || undefined, // Use the fetched profile URL
-          username: userInfo.name,
-        };
-
-        setUserLocation(locationData);
-
-        // Only send location if user is playing music
-        if (currentlyPlaying) {
-          try {
-            await axios.post(`${BACKEND_URL}/api/location`, locationData);
-          } catch (error) {
-            console.error('Failed to update location:', error);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationPermissionDenied(true);
+        return;
+      }
+  
+      const userId = await SecureStore.getItemAsync('lastfm_username');
+      const userImage = await SecureStore.getItemAsync('lastfm_user_image');
+      const lastfmProfileUrl = await AsyncStorage.getItem('lastfm_profile_url');
+  
+      if (!userId) {
+        console.error('User ID is null');
+        return;
+      }
+  
+      locationWatchRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 30000,
+          distanceInterval: 10,
+        },
+        async (location) => {
+          const { latitude, longitude } = location.coords;
+  
+          const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+          if (!sessionKey) {
+            console.error('Session key is null');
+            return;
+          }
+  
+          const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
+          const userInfo = await getUserInfo(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey);
+  
+          const locationData = {
+            id: userId,
+            name: userId,
+            latitude,
+            longitude,
+            imageUrl: userImage || undefined,
+            currentlyPlaying: currentlyPlaying,
+            lastfmProfileUrl: lastfmProfileUrl || undefined,
+            username: userInfo.name,
+          };
+  
+          setUserLocation(locationData);
+  
+          if (currentlyPlaying) {
+            try {
+              await axios.post(`${BACKEND_URL}/api/location`, locationData);
+            } catch (error) {
+              console.error('Failed to update location:', error);
+            }
           }
         }
-      }
-    );
+      );
+    } catch (error) {
+      console.error('Error starting location watch:', error);
+    }
   };
 
   // Listen for changes in currently playing track

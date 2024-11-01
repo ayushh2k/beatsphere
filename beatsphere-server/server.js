@@ -6,10 +6,12 @@ const cors = require('cors');
 const { Kafka, Partitioners } = require('kafkajs');
 const dotenv = require('dotenv');
 const { PassThrough } = require('stream');
+const expressWs = require('express-ws')(express());
+const WebSocket = require('ws');
 
 dotenv.config();
 
-const app = express();
+const app = expressWs.app;
 const clients = new Set();
 const port = process.env.PORT || 3000;
 const kafkaBrokers = process.env.KAFKA_BROKERS.split(',');
@@ -25,7 +27,9 @@ const kafka = new Kafka({
 // Helper function to send events to all connected clients
 const sendEventsToAll = (locations) => {
   clients.forEach(client => {
-    client.write(`data: ${JSON.stringify(locations)}\n\n`);
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(locations));
+    }
   });
 };
 
@@ -118,7 +122,7 @@ app.post('/api/location', async (req, res) => {
     res.status(201).send(newLocation);
   } catch (error) {
     console.error('Error sending location to Kafka:', error);
-    res.status(500).send({ error: 'Failed to send location data' });
+    res.status(500).send({ error: 'Failed to send location data', details: error.message });
   }
 });
 
@@ -152,6 +156,25 @@ app.delete('/api/location/:userId', async (req, res) => {
   } else {
     res.status(404).send({ error: 'User location not found' });
   }
+});
+
+// WebSocket endpoint
+app.ws('/chat', (ws, req) => {
+  console.log('New WebSocket connection');
+
+  ws.on('message', (message) => {
+    console.log(`Received message: ${message}`);
+    // Broadcast the message to all connected clients
+    expressWs.getWss('/chat').clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+  });
+
+  ws.on('close', () => {
+    console.log('WebSocket connection closed');
+  });
 });
 
 app.listen(port, () => {
