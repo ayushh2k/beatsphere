@@ -106,3 +106,113 @@ export const getCurrentlyPlayingTrack = async (apiKey: string, sessionKey: strin
     throw error;
   }
 };
+
+export const getTopTracks = async (apiKey: string, sessionKey: string, username: string) => {
+  const method = 'user.getTopTracks';
+  const params = {
+    method,
+    user: username,
+    api_key: apiKey,
+    sk: sessionKey,
+    limit: 5,
+  };
+
+  try {
+    const response = await axios.get(LASTFM_API_URL, {
+      params: {
+        ...params,
+        format: 'json',
+      },
+    });
+
+    const topTracks = response.data.toptracks.track;
+    return topTracks;
+  } catch (error) {
+    console.error('Failed to fetch top tracks:', error);
+    throw error;
+  }
+};
+
+export const getTopArtists = async (apiKey: string, sessionKey: string, username: string) => {
+  const method = 'user.getTopArtists';
+  const params = {
+    method,
+    user: username,
+    api_key: apiKey,
+    sk: sessionKey,
+    limit: 10,
+  };
+
+  try {
+    const response = await axios.get(LASTFM_API_URL, {
+      params: {
+        ...params,
+        format: 'json',
+      },
+    });
+
+    console.log('Top Artists Response:', response.data["topartists"]["artist"][0]); // Log the response to verify
+
+    const topArtists = response.data.topartists.artist;
+    return topArtists;
+  } catch (error) {
+    console.error('Failed to fetch top artists:', error);
+    throw error;
+  }
+};
+
+export const getRecentTracks = async (apiKey: string, sessionKey: string, username: string) => {
+  const method = 'user.getRecentTracks';
+  const params = {
+    method,
+    user: username,
+    api_key: apiKey,
+    sk: sessionKey,
+    limit: 10,
+  };
+
+  try {
+    const response = await axios.get(LASTFM_API_URL, {
+      params: {
+        ...params,
+        format: 'json',
+      },
+    });
+
+    console.log('Recent Tracks Response:', response.data); // Log the response to verify
+
+    const recentTracks = response.data.recenttracks.track;
+    return recentTracks;
+  } catch (error) {
+    console.error('Failed to fetch recent tracks:', error);
+    throw error;
+  }
+};
+
+export const getTopAlbums = async (apiKey: string, sessionKey: string, username: string) => {
+  const method = 'user.getTopAlbums';
+  const params = {
+    method,
+    user: username,
+    api_key: apiKey,
+    sk: sessionKey,
+    limit: 10,
+  };
+
+  try {
+    const response = await axios.get(LASTFM_API_URL, {
+      params: {
+        ...params,
+        format: 'json',
+      },
+    });
+
+    console.log('Top Albums Response:', response.data); // Log the response to verify
+
+    const topAlbums = response.data.topalbums.album;
+    return topAlbums;
+  } catch (error) {
+    console.error('Failed to fetch top albums:', error);
+    throw error;
+  }
+};

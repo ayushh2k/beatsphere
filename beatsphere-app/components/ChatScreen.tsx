@@ -1,5 +1,4 @@
 // components/ChatScreen.tsx
-
 import React from 'react';
 import {
   View,
@@ -11,11 +10,8 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 interface Message {
   id: string;
@@ -65,12 +61,6 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
       const currentUserId = await SecureStore.getItemAsync('lastfm_username');
       this.setState({ userId: currentUserId || '' });
 
-      const chatKey = this.getChatKey(currentUserId || '', this.props.receiverId);
-      const storedMessages = await AsyncStorage.getItem(chatKey);
-      if (storedMessages) {
-        this.setState({ messages: JSON.parse(storedMessages) });
-      }
-
       if (!this.ws) {
         this.ws = new WebSocket(`ws://192.168.1.8:3000/chat`);
 
@@ -85,13 +75,16 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
 
         this.ws.onmessage = (event) => {
           const message = JSON.parse(event.data);
-          // Only handle messages that weren't sent by the current user
-          if (message.senderId === this.props.receiverId && message.receiverId === currentUserId) {
-            this.setState(prevState => {
-              const newMessages = [...prevState.messages, message];
-              this.saveMessages(newMessages, currentUserId || '', this.props.receiverId);
-              return { messages: newMessages };
-            });
+          
+          // Handle messages that are part of this conversation
+          if (
+            (message.senderId === this.props.receiverId && message.receiverId === this.state.userId) ||
+            (message.senderId === this.state.userId && message.receiverId === this.props.receiverId)
+          ) {
+            this.setState((prevState: ChatScreenState) => ({
+              ...prevState,
+              messages: [...prevState.messages, message],
+            }));
           }
         };
 
@@ -106,15 +99,6 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
     } catch (error) {
       console.error('Error initializing chat:', error);
     }
-  };
-
-  getChatKey = (userId1: string, userId2: string) => {
-    return `chat_${[userId1, userId2].sort().join('_')}`;
-  };
-
-  saveMessages = async (messages: Message[], userId1: string, userId2: string) => {
-    const chatKey = this.getChatKey(userId1, userId2);
-    await AsyncStorage.setItem(chatKey, JSON.stringify(messages));
   };
 
   sendMessage = () => {
@@ -134,15 +118,11 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
         ...message,
       }));
 
-      // Update local state and storage immediately for sent messages
-      this.setState(prevState => {
-        const newMessages = [...prevState.messages, message];
-        this.saveMessages(newMessages, this.state.userId, this.props.receiverId);
-        return {
-          messages: newMessages,
-          inputText: '',
-        };
-      });
+      // Update local state immediately
+      this.setState((prevState: ChatScreenState) => ({
+        messages: [...prevState.messages, message],
+        inputText: '',
+      }));
     }
   };
 

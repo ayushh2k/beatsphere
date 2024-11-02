@@ -13,6 +13,8 @@ dotenv.config();
 
 const app = expressWs.app;
 const clients = new Set();
+const wsClients = new Map();
+const globalChatClients = new Set();
 const port = process.env.PORT || 3000;
 const kafkaBrokers = process.env.KAFKA_BROKERS.split(',');
 
@@ -29,6 +31,14 @@ const sendEventsToAll = (locations) => {
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(locations));
+    }
+  });
+};
+
+const broadcastGlobalMessage = (message) => {
+  globalChatClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(message));
     }
   });
 };
@@ -161,19 +171,71 @@ app.delete('/api/location/:userId', async (req, res) => {
 // WebSocket endpoint
 app.ws('/chat', (ws, req) => {
   console.log('New WebSocket connection');
+  let userId = null;
 
   ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
-    // Broadcast the message to all connected clients
-    expressWs.getWss('/chat').clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
+    const data = JSON.parse(message);
+    console.log('Received message:', data);
+
+    switch (data.type) {
+      case 'join':
+        userId = data.userId;
+        wsClients.set(userId, ws);
+        console.log(`User ${userId} joined chat`);
+
+        // If joining global chat
+        if (data.room === 'global') {
+          globalChatClients.add(ws);
+          console.log(`User ${userId} joined global chat`);
+        }
+        break;
+
+      case 'message':
+        const messageData = {
+          id: data.id,
+          senderId: data.senderId,
+          text: data.text,
+          timestamp: data.timestamp,
+          senderName: data.senderName || 'Anonymous'
+        };
+
+        // Handle global chat messages
+        if (data.room === 'global') {
+          broadcastGlobalMessage({
+            type: 'globalMessage',
+            ...messageData
+          });
+        } else {
+          // Handle private messages
+          const receiverConnection = wsClients.get(data.receiverId);
+          if (receiverConnection) {
+            receiverConnection.send(JSON.stringify({
+              type: 'privateMessage',
+              ...messageData,
+              receiverId: data.receiverId
+            }));
+          }
+
+          // Send to sender's other devices
+          const senderConnections = wsClients.get(data.senderId);
+          if (senderConnections && senderConnections !== ws) {
+            senderConnections.send(JSON.stringify({
+              type: 'privateMessage',
+              ...messageData,
+              receiverId: data.receiverId
+            }));
+          }
+        }
+        break;
+    }
   });
 
   ws.on('close', () => {
-    console.log('WebSocket connection closed');
+    if (userId) {
+      wsClients.delete(userId);
+      globalChatClients.delete(ws);
+      console.log(`User ${userId} disconnected`);
+    }
   });
 });
 
