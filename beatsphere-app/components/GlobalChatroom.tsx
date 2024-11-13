@@ -55,7 +55,7 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
       const displayName = await SecureStore.getItemAsync('display_name') || currentUserId;
       this.setState({ userId: currentUserId || '', userName: displayName || '' });
 
-      this.ws = new WebSocket(`ws://192.168.1.8:3000/chat`);
+      this.ws = new WebSocket(`ws://192.168.115.201:3000/chat`);
 
       this.ws.onopen = () => {
         if (this.ws) {

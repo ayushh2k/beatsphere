@@ -15,10 +15,9 @@ export const getMobileSession = async (token: string, apiKey: string, sharedSecr
     api_key: apiKey,
   };
 
-  // Construct the api_sig parameter
   const sortedParams = Object.keys(params)
     .sort()
-    .map(key => `${key}${params[key as keyof typeof params]}`) // Use type assertion here
+    .map(key => `${key}${params[key as keyof typeof params]}`)
     .join('');
   const apiSig = stringMd5(sortedParams + sharedSecret);
 
@@ -71,7 +70,7 @@ export const getCurrentlyPlayingTrack = async (apiKey: string, sessionKey: strin
     api_key: apiKey,
     sk: sessionKey,
     limit: 1,
-    from: Math.floor(Date.now() / 1000) - 3600, // Current Unix timestamp
+    from: Math.floor(Date.now() / 1000) - 3600,
   };
 
   try {
@@ -90,10 +89,8 @@ export const getCurrentlyPlayingTrack = async (apiKey: string, sessionKey: strin
       return null;
     }
 
-    // Handle the case where tracks is a single object
     const currentlyPlayingTrack = Array.isArray(tracks) ? tracks.find((track: any) => track['@attr']?.nowplaying === 'true') : tracks['@attr']?.nowplaying === 'true' ? tracks : null;
 
-    // Store the currently playing track in AsyncStorage
     if (currentlyPlayingTrack) {
       await AsyncStorage.setItem('currently_playing', JSON.stringify(currentlyPlayingTrack));
     } else {
@@ -151,8 +148,6 @@ export const getTopArtists = async (apiKey: string, sessionKey: string, username
       },
     });
 
-    console.log('Top Artists Response:', response.data["topartists"]["artist"][0]); // Log the response to verify
-
     const topArtists = response.data.topartists.artist;
     return topArtists;
   } catch (error) {
@@ -179,8 +174,6 @@ export const getRecentTracks = async (apiKey: string, sessionKey: string, userna
       },
     });
 
-    console.log('Recent Tracks Response:', response.data); // Log the response to verify
-
     const recentTracks = response.data.recenttracks.track;
     return recentTracks;
   } catch (error) {
@@ -206,8 +199,6 @@ export const getTopAlbums = async (apiKey: string, sessionKey: string, username:
         format: 'json',
       },
     });
-
-    console.log('Top Albums Response:', response.data); // Log the response to verify
 
     const topAlbums = response.data.topalbums.album;
     return topAlbums;

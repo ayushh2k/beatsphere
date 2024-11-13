@@ -25,6 +25,7 @@ interface SongCardProps {
 
 const SongCard: React.FC<SongCardProps> = ({ track }) => {
     const image = track.image.find(img => img.size === 'extralarge');
+    const isCurrentlyPlaying = track['@attr']?.nowplaying === 'true';
 
     return (
         <View style={styles.card}>
@@ -36,17 +37,20 @@ const SongCard: React.FC<SongCardProps> = ({ track }) => {
             ) : (
                 <Text>No image available</Text>
             )}
-            <Text style={styles.title}>{track.name}</Text>
-            <Text style={styles.artist}>{track.artist['#text']}</Text>
+            <View style={styles.textContainer}>
+                {isCurrentlyPlaying && <Text style={styles.currentlyPlaying}>Currently Playing</Text>}
+                <Text style={styles.title}>{track.name}</Text>
+                <Text style={styles.artist}>{track.artist['#text']}</Text>
+            </View>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 12,
+        backgroundColor: '#262626',
+        borderRadius: 12,
+        padding: 16,
         marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -55,25 +59,33 @@ const styles = StyleSheet.create({
         elevation: 3,
         flexDirection: 'row',
         alignItems: 'center',
-        // width: '100%',
+        width: '100%',
     },
     image: {
-        width: 50,
-        height: 50,
+        width: 80,
+        height: 80,
         borderRadius: 8,
-        // marginBottom: 8,
+        marginRight: 16,
     },
-    title: {
-        fontSize: 16,
-        // fontWeight: 'bold',
-        fontFamily: 'AvenirNextLTPro-Bold',
-        marginBottom: 4,
+    textContainer: {
+        flex: 1,
     },
-    artist: {
-        fontSize: 14,
-        color: '#555',
+    currentlyPlaying: {
+        fontSize: 12,
+        color: '#888',
         marginBottom: 4,
         fontFamily: 'AvenirNextLTPro-Regular',
+    },
+    title: {
+        fontSize: 18,
+        fontFamily: 'AvenirNextLTPro-Bold',
+        marginBottom: 4,
+        color: '#ffffff',
+    },
+    artist: {
+        fontSize: 16,
+        color: '#808080',
+        fontFamily: 'AvenirNextLTPro-Bold',
     },
 });
 

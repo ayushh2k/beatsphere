@@ -62,7 +62,7 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
       this.setState({ userId: currentUserId || '' });
 
       if (!this.ws) {
-        this.ws = new WebSocket(`ws://192.168.1.8:3000/chat`);
+        this.ws = new WebSocket(`ws://192.168.115.201:3000/chat`);
 
         this.ws.onopen = () => {
           if (this.ws) {

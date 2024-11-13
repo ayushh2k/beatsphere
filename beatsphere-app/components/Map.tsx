@@ -13,7 +13,7 @@ import mapStyle from '../utils/mapStyle.json';
 import EventSource from 'react-native-event-source'; // Use react-native-event-source
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
 
-const BACKEND_URL = 'http://192.168.1.8:3000'; // Your backend URL
+const BACKEND_URL = 'http://192.168.115.201:3000'; // Your backend URL
 
 interface UserLocation {
   id: string;
@@ -210,7 +210,7 @@ const Map = () => {
   if (locationPermissionDenied) {
     return (
       <View style={styles.container}>
-        <Text>Location permission denied. Please enable location services.</Text>
+        <Text style={styles.permissionDeniedText}>Location permission denied. Please enable location services.</Text>
       </View>
     );
   }
@@ -237,7 +237,7 @@ const Map = () => {
               longitude: userLocation.longitude,
             }}
             title={`${userLocation.name} - ${userLocation.currentlyPlaying.name} by ${userLocation.currentlyPlaying.artist['#text']}`}
-            //@ts-ignore
+            // @ts-ignore
             imageUrl={userLocation.imageUrl}
             currentlyPlaying={userLocation.currentlyPlaying}
             lastfmProfileUrl={userLocation.lastfmProfileUrl}
@@ -252,7 +252,7 @@ const Map = () => {
               longitude: user.longitude,
             }}
             title={`${user.name} - ${user.currentlyPlaying?.name} by ${user.currentlyPlaying?.artist['#text']}`}
-            //@ts-ignore
+            // @ts-ignore
             imageUrl={user.imageUrl}
             currentlyPlaying={user.currentlyPlaying}
             lastfmProfileUrl={`https://www.last.fm/user/${user.id}`}
@@ -272,6 +272,12 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  permissionDeniedText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 

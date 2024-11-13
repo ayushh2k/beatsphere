@@ -18,7 +18,16 @@ const TabsLayout = () => {
       }}>
         <Tabs.Screen name="home" options={{
           title: 'Home',
-          headerShown: false,
+          // headerShown: false,
+          headerStyle: {
+            backgroundColor: '#121212',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            // fontWeight: 'bold',
+            fontFamily: 'AvenirNextLTPro-Bold',
+          },
+          headerTitleAlign: 'center',
           tabBarIcon: ({ color }) => (
             <Ionicons name="home-outline" size={24} color={color} />
           )

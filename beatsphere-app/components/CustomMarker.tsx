@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import React from 'react';
 import { View, Image, StyleSheet, Text, Linking } from 'react-native';
 import { Marker, Callout, CalloutPressEvent } from 'react-native-maps';
-import {Svg, Image as ImageSvg} from 'react-native-svg';
+import { Svg, Image as ImageSvg } from 'react-native-svg';
 
 interface CustomMarkerProps {
   coordinate: {
@@ -38,7 +38,7 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
   lastfmProfileUrl,
   username,
 }) => {
-  const fallbackImage = 'https://via.placeholder.com/100'; // Fallback image URL
+  const fallbackImage = 'https://placehold.co/20x30'; // Fallback image URL
 
   // Extract the extralarge image URL
   const extralargeImageUrl = currentlyPlaying?.image.find(img => img.size === 'extralarge')?.['#text'] || fallbackImage;
@@ -57,7 +57,7 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
   };
 
   function handleCalloutPress(event: CalloutPressEvent): void {
-    router.push("/chat")
+    router.push("/chat");
   }
 
   return (
@@ -67,8 +67,8 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
           <Image source={{ uri: imageUrl }} style={styles.markerImage} />
         )}
       </View>
-      <Callout  onPress={handleCalloutPress}>
-        <View style={styles.calloutContainer}>
+      <Callout onPress={handleCalloutPress}>
+        {/* <View style={styles.calloutContainer}> */}
           <Text style={styles.calloutTitle}>{username}</Text>
           {currentlyPlaying ? (
             <>
@@ -84,7 +84,6 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
                   width={'100%'}
                   height={'100%'}
                   preserveAspectRatio="xMidYMid slice"
-                // style={styles.calloutImage}
                 />
               </Svg>
               <Text style={styles.calloutLink}>
@@ -94,7 +93,7 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
           ) : (
             <Text>No track is currently playing</Text>
           )}
-        </View>
+        {/* </View> */}
       </Callout>
     </Marker>
   );
@@ -102,32 +101,43 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
 
 const styles = StyleSheet.create({
   markerContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 100,
+    height: 100,
+    // borderRadius: 20,
+    // backgroundColor: 'white',
+    // justifyContent: 'center',
+    // alignItems: 'center',
+    // borderWidth: 2,
+    // borderColor: '#f4511e',
+    // overflow: 'hidden',
   },
   markerImage: {
     width: 35,
     height: 35,
-    borderRadius: 17
+    // borderRadius: 17,
   },
   calloutContainer: {
     width: 200,
-    // height: 700,
+    height: 100,
     padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 10, // Add margin to avoid clipping
   },
   calloutTitle: {
     fontWeight: 'bold',
-    fontSize: 10,
-    marginBottom: 0,
+    fontSize: 16,
+    marginBottom: 8,
     textAlign: 'center',
   },
   calloutSubtitle: {
-    fontSize: 8,
-    marginBottom: 2,
+    fontSize: 14,
+    marginBottom: 4,
     textAlign: 'center',
   },
   calloutImage: {
@@ -137,10 +147,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   calloutLink: {
-    color: 'blue',
+    color: '#f4511e', // Customize the link color
     textAlign: 'center',
     marginTop: 5,
-    fontSize: 10,
+    fontSize: 14,
   },
 });
 

@@ -39,8 +39,8 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    backgroundColor: '#262626',
+    borderRadius: 12,
     padding: 16,
     marginRight: 16,
     shadowColor: '#000',
@@ -49,29 +49,26 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     width: 150,
-    flex: 1,
     alignItems: 'center',
   },
   image: {
-    width: 100,
-    height: 100,
-    borderRadius: 100,
-    alignContent: 'center',
-    justifyContent: 'center',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     marginBottom: 8,
   },
   name: {
     fontSize: 16,
+    color: '#ffffff',
     marginBottom: 4,
     textAlign: 'center',
     fontFamily: 'AvenirNextLTPro-Bold',
   },
   artist: {
     fontSize: 14,
-    color: '#555',
-    marginBottom: 14,
+    color: '#808080',
     textAlign: 'center',
-    fontFamily: 'AvenirNextLTPro-Regular',
+    fontFamily: 'AvenirNextLTPro-Bold',
   },
 });
 
