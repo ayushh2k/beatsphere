@@ -1,7 +1,7 @@
 // components/LoginWithLastFM.tsx
 
 import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, Linking, View, StyleSheet, Dimensions, Animated } from 'react-native';
+import { TouchableOpacity, Text, Linking, View, StyleSheet, Dimensions, Animated, Image } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMobileSession, getUserInfo } from '../utils/lastFmHelpers';
@@ -70,28 +70,26 @@ export default function LoginWithLastFM() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.glassCard}>
-        <Animated.View style={[styles.buttonContainer, { transform: [{ scale: buttonScale }] }]}>
-          <TouchableOpacity
-            onPress={handleLogin}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={styles.loginButton}
-          >
-            {/* <Ionicons name="musical-notes" size={24} color="#FFFFFF" style={styles.icon} /> */}
-            <Text style={styles.buttonText}>Login with Last.fm</Text>
-          </TouchableOpacity>
-        </Animated.View>
-        <Text style={styles.guideText}>
-          New to Last.fm?{'\n'}Learn how to connect{' '}
-          <Text
-            style={styles.spotifyLink}
-            onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}
-          >
-            Spotify to Last.fm
-          </Text>
+      <Animated.View style={[styles.buttonContainer, { transform: [{ scale: buttonScale }] }]}>
+        <TouchableOpacity
+          onPress={handleLogin}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={styles.loginButton}
+        >
+          <Ionicons name="musical-notes" size={24} color="#FFFFFF" style={styles.icon} />
+          <Text style={styles.buttonText}>Login with Last.fm</Text>
+        </TouchableOpacity>
+      </Animated.View>
+      <Text style={styles.guideText}>
+        New to Last.fm?{'\n'}Learn how to connect{' '}
+        <Text
+          style={styles.spotifyLink}
+          onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}
+        >
+          Spotify to Last.fm
         </Text>
-      </View>
+      </Text>
     </View>
   );
 }
@@ -101,31 +99,12 @@ const styles = StyleSheet.create({
     width: width * 0.8,
     alignItems: 'center',
   },
-  appName: {
-    fontSize: 32,
-    fontFamily: 'AvenirNextLTPro-Bold',
-    color: '#FFFFFF',
-    marginBottom: 40,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 5,
-  },
-  glassCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    padding: 30,
-    width: '100%',
-    alignItems: 'center',
-    backdropFilter: 'blur(10px)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
   buttonContainer: {
     width: '100%',
     marginBottom: 20,
   },
   loginButton: {
-    backgroundColor: 'rgba(255, 64, 64, 0.8)',
+    backgroundColor: '#D92323',
     borderRadius: 30,
     paddingVertical: 15,
     paddingHorizontal: 30,

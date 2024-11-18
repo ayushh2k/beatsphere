@@ -57,7 +57,7 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
       const displayName = await SecureStore.getItemAsync('display_name') || currentUserId;
       this.setState({ userId: currentUserId || '', userName: displayName || '' });
 
-      this.ws = new WebSocket(`ws://192.168.115.201:3000/chat`);
+      this.ws = new WebSocket(`wss://34.47.235.85.nip.io/chat`);
 
       this.ws.onopen = () => {
         if (this.ws) {
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#333'
   },
   senderName: {
-    color: '#1ED760',
+    color: '#D92323',
     fontSize: 12,
     marginBottom: 4
   },

@@ -14,7 +14,8 @@ import EventSource from 'react-native-event-source';
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
 import { Ionicons } from '@expo/vector-icons';
 
-const BACKEND_URL = 'http://192.168.115.201:3000';
+// const BACKEND_URL = 'http://192.168.115.201:3000';
+const BACKEND_URL = 'https://34.47.235.85.nip.io';
 
 interface UserLocation {
   id: string;

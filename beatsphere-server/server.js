@@ -26,7 +26,6 @@ const kafka = new Kafka({
   brokers: kafkaBrokers,
 });
 
-// Helper function to send events to all connected clients
 const sendEventsToAll = (locations) => {
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -53,10 +52,8 @@ let userLocations = [];
 
 const run = async () => {
   try {
-    // Connect to Kafka producer
     await producer.connect();
 
-    // Connect to Kafka consumer
     await consumer.connect();
     await consumer.subscribe({ topic: 'user_locations', fromBeginning: true });
 
@@ -65,7 +62,6 @@ const run = async () => {
         const location = JSON.parse(message.value.toString());
         console.log(`Received location: ${JSON.stringify(location)}`);
         
-        // Update or add the user's location
         const existingIndex = userLocations.findIndex(loc => loc.id === location.id);
         if (existingIndex !== -1) {
           userLocations[existingIndex] = location;
@@ -73,7 +69,6 @@ const run = async () => {
           userLocations.push(location);
         }
     
-        // Send updates to all connected clients
         sendEventsToAll(userLocations);
       },
     });
@@ -94,14 +89,12 @@ app.get('/api/locations/stream', (req, res) => {
   const stream = new PassThrough();
   clients.add(stream);
 
-  // Send initial data
   stream.write(`data: ${JSON.stringify(userLocations)}\n\n`);
 
   const keepAlive = setInterval(() => {
     stream.write(': keep-alive\n\n');
   }, 30000);
 
-  // Remove client on connection close
   req.on('close', () => {
     clearInterval(keepAlive);
     clients.delete(stream);
@@ -132,7 +125,6 @@ app.post('/api/location', async (req, res) => {
       ],
     });
 
-    // Send immediate update to all clients
     sendEventsToAll(userLocations);
 
     res.status(201).send(newLocation);
@@ -146,7 +138,6 @@ app.get('/api/locations', (req, res) => {
   res.status(200).send(userLocations);
 });
 
-// New endpoint to get a specific user's location
 app.get('/api/location/:userId', (req, res) => {
   const userId = req.params.userId;
   const userLocation = userLocations.find(location => location.id === userId);
@@ -157,13 +148,11 @@ app.get('/api/location/:userId', (req, res) => {
   }
 });
 
-// New endpoint to delete a user's location
 app.delete('/api/location/:userId', async (req, res) => {
   const userId = req.params.userId;
   const index = userLocations.findIndex(location => location.id === userId);
   if (index !== -1) {
     userLocations.splice(index, 1);
-    // Optionally, you can send a message to Kafka about the deletion
     await producer.send({
       topic: 'user_locations_deleted',
       messages: [{ value: userId }],
@@ -189,7 +178,6 @@ app.ws('/chat', (ws, req) => {
         wsClients.set(userId, ws);
         console.log(`User ${userId} joined chat`);
 
-        // If joining global chat
         if (data.room === 'global') {
           globalChatClients.add(ws);
           console.log(`User ${userId} joined global chat`);
@@ -205,14 +193,12 @@ app.ws('/chat', (ws, req) => {
           senderName: data.senderName || 'Anonymous'
         };
 
-        // Handle global chat messages
         if (data.room === 'global') {
           broadcastGlobalMessage({
             type: 'globalMessage',
             ...messageData
           });
         } else {
-          // Handle private messages
           const receiverConnection = wsClients.get(data.receiverId);
           if (receiverConnection) {
             receiverConnection.send(JSON.stringify({
@@ -222,7 +208,6 @@ app.ws('/chat', (ws, req) => {
             }));
           }
 
-          // Send to sender's other devices
           const senderConnections = wsClients.get(data.senderId);
           if (senderConnections && senderConnections !== ws) {
             senderConnections.send(JSON.stringify({

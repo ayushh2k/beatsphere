@@ -4,7 +4,7 @@
     "slug": "beatsphere",
     "version": "1.0.0",
     "orientation": "portrait",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "icon": "./assets/images/icon.png",
     "scheme": "beatsphere",
     "userInterfaceStyle": "automatic",
@@ -21,6 +21,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "newArchEnabled": false,
       "package": "com.beatsphere.beatsphere"
     },
     "web": {

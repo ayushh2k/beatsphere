@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import React from 'react';
 import { View, Image, StyleSheet, Text, Linking } from 'react-native';
 import { Marker, Callout, CalloutPressEvent } from 'react-native-maps';
-import {Svg, Image as ImageSvg} from 'react-native-svg';
+import { Svg, Image as ImageSvg } from 'react-native-svg';
 
 interface CustomMarkerProps {
   coordinate: {

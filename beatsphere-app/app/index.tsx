@@ -1,11 +1,10 @@
 // app/index.tsx
 
 import React, { useEffect, useState } from "react";
-import { ImageBackground, Text, View, StyleSheet, Dimensions } from "react-native";
+import { Text, View, StyleSheet, Dimensions, Image } from "react-native";
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BlurView } from 'expo-blur';
 import LoginWithLastFM from "@/components/LoginWithLastFM";
 import * as SecureStore from 'expo-secure-store';
 import { useFonts } from 'expo-font';
@@ -43,20 +42,13 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ImageBackground 
-        source={require('../assets/images/chart.png')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <BlurView intensity={20} style={styles.overlay}>
-          <SafeAreaView style={styles.safeArea}>
-            <View style={styles.contentContainer}>
-              <Text style={styles.appName}>BeatSphere 🌏</Text>
-              <LoginWithLastFM />
-            </View>
-          </SafeAreaView>
-        </BlurView>
-      </ImageBackground>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.contentContainer}>
+          <Image source={require('../assets/images/logo.jpg')} style={styles.logo} />
+          <Text style={styles.appName}>BeatSphere</Text>
+          <LoginWithLastFM />
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -64,15 +56,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: '#121212', // Dark background color
   },
   safeArea: {
     flex: 1,
@@ -82,6 +66,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    borderRadius: 60, // Make the logo a circle
+    marginBottom: 20,
   },
   appName: {
     fontSize: 36,
