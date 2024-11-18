@@ -88,6 +88,7 @@ app.get('/api/locations/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
   const stream = new PassThrough();
@@ -96,8 +97,13 @@ app.get('/api/locations/stream', (req, res) => {
   // Send initial data
   stream.write(`data: ${JSON.stringify(userLocations)}\n\n`);
 
+  const keepAlive = setInterval(() => {
+    stream.write(': keep-alive\n\n');
+  }, 30000);
+
   // Remove client on connection close
   req.on('close', () => {
+    clearInterval(keepAlive);
     clients.delete(stream);
     stream.end();
   });
