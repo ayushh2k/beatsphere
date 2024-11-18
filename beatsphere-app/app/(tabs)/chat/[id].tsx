@@ -1,32 +1,22 @@
 // app/(tabs)/chat/[id].tsx
-
 import React from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import GlobalChatroom from '@/components/GlobalChatroom';
 import ChatScreen from '@/components/ChatScreen';
 
+type ChatRoomParams = {
+  id: string;
+};
+
 const ChatRoom = () => {
-  const { id } = useLocalSearchParams<{ id: string | string[] }>();
-  const router = useRouter();
+  const { id } = useLocalSearchParams<ChatRoomParams>();
 
-  // Ensure id is always a string
-  const chatRoomId = Array.isArray(id) ? id[0] : id;
-
-  // You can fetch the chat room details based on the `id` here
-  const chatRoom = {
-    id: chatRoomId,
-    name: `Chat Room ${chatRoomId}`,
-  };
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#121212' }}>
-      <ChatScreen
-        receiverId={chatRoom.id}
-        receiverName={chatRoom.name}
-        onClose={() => router.back()}
-      />
-    </SafeAreaView>
-  );
+  if (id === 'global') {
+    return <GlobalChatroom />;
+  } else {
+    return <ChatScreen receiverId={id} receiverName={`User ${id}`} onClose={() => {}} />;
+  }
 };
 
 export default ChatRoom;

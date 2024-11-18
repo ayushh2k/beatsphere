@@ -8,23 +8,23 @@ const TabsLayout = () => {
     <>
       <Tabs screenOptions={{
         tabBarShowLabel: false,
-        tabBarActiveTintColor: '#1ED760',
+        tabBarActiveTintColor: '#D92323',
         tabBarStyle: {
           backgroundColor: '#121212',
           borderTopWidth: 1,
-          borderTopColor: '#1ED760',
-          height: 60
+          borderTopColor: '#D92323',
+          borderColor: '#1a1a1a',
+          height: 60,
+          paddingTop: 8,
         },
       }}>
         <Tabs.Screen name="home" options={{
           title: 'Home',
-          // headerShown: false,
           headerStyle: {
             backgroundColor: '#121212',
           },
           headerTintColor: '#fff',
           headerTitleStyle: {
-            // fontWeight: 'bold',
             fontFamily: 'AvenirNextLTPro-Bold',
           },
           headerTitleAlign: 'center',
@@ -40,15 +40,29 @@ const TabsLayout = () => {
           )
         }} />
         <Tabs.Screen name="chat" options={{
-          title: 'Chat',
-          headerShown: false,
+          title: 'Global Chatroom',
+          headerStyle: {
+            backgroundColor: '#121212',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontFamily: 'AvenirNextLTPro-Bold',
+          },
+          headerTitleAlign: 'center',
           tabBarIcon: ({ color }) => (
             <Ionicons name="chatbubble-outline" size={24} color={color} />
           )
         }} />
         <Tabs.Screen name="profile" options={{
           title: 'Profile',
-          headerShown: false,
+          headerStyle: {
+            backgroundColor: '#121212',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontFamily: 'AvenirNextLTPro-Bold',
+          },
+          headerTitleAlign: 'center',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />
           )
@@ -56,7 +70,7 @@ const TabsLayout = () => {
         {/* Hide the [id] route from the navigation menu */}
         <Tabs.Screen name="chat/[id]" options={{
           href: null,
-          headerShown: false, // Hide the header for the [id] route
+          headerShown: false,
         }} />
       </Tabs>
     </>

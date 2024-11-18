@@ -1,8 +1,8 @@
 // components/Map.tsx
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Text, AppState, AppStateStatus } from 'react-native';
-import MapView from 'react-native-maps';
+import { View, StyleSheet, Text, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,17 +10,18 @@ import CustomMarker from './CustomMarker';
 import MapCluster from 'react-native-map-clustering';
 import axios from 'axios';
 import mapStyle from '../utils/mapStyle.json';
-import EventSource from 'react-native-event-source'; // Use react-native-event-source
+import EventSource from 'react-native-event-source';
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
+import { Ionicons } from '@expo/vector-icons';
 
-const BACKEND_URL = 'http://192.168.115.201:3000'; // Your backend URL
+const BACKEND_URL = 'http://192.168.115.201:3000';
 
 interface UserLocation {
   id: string;
   name: string;
   latitude: number;
   longitude: number;
-  imageUrl?: string | null; // Allow null
+  imageUrl?: string | null;
   currentlyPlaying?: {
     name: string;
     artist: {
@@ -36,6 +37,7 @@ interface UserLocation {
   } | null;
   lastfmProfileUrl?: string;
   username?: string;
+  lastUpdated?: number;
 }
 
 const Map = () => {
@@ -46,26 +48,31 @@ const Map = () => {
   const eventSourceRef = useRef<EventSource | null>(null);
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastLocationUpdateRef = useRef<number>(0);
 
-  // Initialize SSE connection
   const initializeSSE = async () => {
     const userId = await SecureStore.getItemAsync('lastfm_username');
     if (!userId) return;
 
-    // Close existing connection if any
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
-    // Create new SSE connection
     const eventSource = new EventSource(`${BACKEND_URL}/api/locations/stream`);
 
     eventSource.addEventListener('message', (event) => {
       if (event.data) {
-        const locations: UserLocation[] = JSON.parse(event.data);
-        setOtherUsers(locations.filter(location => 
-          location.id !== userId && location.currentlyPlaying
-        ));
+        try {
+          const locations: UserLocation[] = JSON.parse(event.data);
+          const now = Date.now();
+          setOtherUsers(locations.filter(location =>
+            location.id !== userId &&
+            location.currentlyPlaying &&
+            (!location.lastUpdated || now - location.lastUpdated < 300000)
+          ));
+        } catch (error) {
+          console.error('Error parsing SSE data:', error);
+        }
       }
     });
 
@@ -78,34 +85,51 @@ const Map = () => {
     eventSourceRef.current = eventSource;
   };
 
-  // Handle app state changes
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        // App has come to foreground
-        initializeSSE();
-        startLocationWatch();
-      } else if (nextAppState.match(/inactive|background/)) {
-        // App has gone to background
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-        }
-        if (locationWatchRef.current) {
-          locationWatchRef.current.remove();
-        }
-      }
-      appStateRef.current = nextAppState;
-    });
+  const updateLocation = async (
+    latitude: number,
+    longitude: number,
+    currentlyPlaying: any = null
+  ) => {
+    const now = Date.now();
+    if (!currentlyPlaying) {
+      setUserLocation(null);
+      return;
+    }
 
-    return () => {
-      subscription.remove();
+    if (now - lastLocationUpdateRef.current < 5000) return;
+    lastLocationUpdateRef.current = now;
+
+    const userId = await SecureStore.getItemAsync('lastfm_username');
+    const userImage = await SecureStore.getItemAsync('lastfm_user_image');
+    const lastfmProfileUrl = await AsyncStorage.getItem('lastfm_profile_url');
+    const userInfo = await getUserInfo(
+      process.env.EXPO_PUBLIC_LASTFM_KEY!,
+      await SecureStore.getItemAsync('lastfm_session_key') || ''
+    );
+
+    if (!userId) return;
+
+    const locationData: UserLocation = {
+      id: userId,
+      name: userId,
+      latitude,
+      longitude,
+      imageUrl: userImage || undefined,
+      currentlyPlaying,
+      lastfmProfileUrl: lastfmProfileUrl || undefined,
+      username: userInfo.name,
+      lastUpdated: now,
     };
-  }, []);
 
-  // Start watching location
+    setUserLocation(locationData);
+
+    try {
+      await axios.post(`${BACKEND_URL}/api/location`, locationData);
+    } catch (error) {
+      console.error('Failed to update location:', error);
+    }
+  };
+
   const startLocationWatch = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -113,16 +137,7 @@ const Map = () => {
         setLocationPermissionDenied(true);
         return;
       }
-  
-      const userId = await SecureStore.getItemAsync('lastfm_username');
-      const userImage = await SecureStore.getItemAsync('lastfm_user_image');
-      const lastfmProfileUrl = await AsyncStorage.getItem('lastfm_profile_url');
-  
-      if (!userId) {
-        console.error('User ID is null');
-        return;
-      }
-  
+
       locationWatchRef.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Balanced,
@@ -131,34 +146,19 @@ const Map = () => {
         },
         async (location) => {
           const { latitude, longitude } = location.coords;
-  
           const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-          if (!sessionKey) {
-            console.error('Session key is null');
-            return;
-          }
-  
-          const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
-          const userInfo = await getUserInfo(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey);
-  
-          const locationData = {
-            id: userId,
-            name: userId,
-            latitude,
-            longitude,
-            imageUrl: userImage || undefined,
-            currentlyPlaying: currentlyPlaying,
-            lastfmProfileUrl: lastfmProfileUrl || undefined,
-            username: userInfo.name,
-          };
-  
-          setUserLocation(locationData);
-  
-          if (currentlyPlaying) {
-            try {
-              await axios.post(`${BACKEND_URL}/api/location`, locationData);
-            } catch (error) {
-              console.error('Failed to update location:', error);
+          const userId = await SecureStore.getItemAsync('lastfm_username');
+
+          if (sessionKey && userId) {
+            const currentlyPlaying = await getCurrentlyPlayingTrack(
+              process.env.EXPO_PUBLIC_LASTFM_KEY!,
+              sessionKey,
+              userId
+            );
+            if (currentlyPlaying) {
+              await updateLocation(latitude, longitude, currentlyPlaying);
+            } else {
+              setUserLocation(null);
             }
           }
         }
@@ -168,49 +168,76 @@ const Map = () => {
     }
   };
 
-  // Listen for changes in currently playing track
+  const handleRefresh = async () => {
+    eventSourceRef.current?.close();
+    locationWatchRef.current?.remove();
+    await initializeSSE();
+    await startLocationWatch();
+  };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        initializeSSE();
+        startLocationWatch();
+      } else if (nextAppState.match(/inactive|background/)) {
+        eventSourceRef.current?.close();
+        locationWatchRef.current?.remove();
+      }
+      appStateRef.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   useEffect(() => {
     const checkCurrentlyPlaying = async () => {
       const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
       const userId = await SecureStore.getItemAsync('lastfm_username');
-      if (!sessionKey || !userId) {
-        console.error('Session key or user ID is null');
-        return;
-      }
+      if (!sessionKey || !userId) return;
 
-      const currentlyPlaying = await getCurrentlyPlayingTrack(process.env.EXPO_PUBLIC_LASTFM_KEY!, sessionKey, userId);
-      if (userLocation) {
-        setUserLocation(prev => ({
-          ...prev!,
-          currentlyPlaying: currentlyPlaying,
-        }));
+      const currentlyPlaying = await getCurrentlyPlayingTrack(
+        process.env.EXPO_PUBLIC_LASTFM_KEY!,
+        sessionKey,
+        userId
+      );
+
+      if (currentlyPlaying && userLocation?.latitude && userLocation?.longitude) {
+        await updateLocation(
+          userLocation.latitude,
+          userLocation.longitude,
+          currentlyPlaying
+        );
+      } else if (!currentlyPlaying) {
+        setUserLocation(null);
       }
     };
 
-    const interval = setInterval(checkCurrentlyPlaying, 5000); // Check every 5 seconds
-
+    const interval = setInterval(checkCurrentlyPlaying, 5000);
     return () => clearInterval(interval);
   }, [userLocation]);
 
-  // Initialize everything
   useEffect(() => {
     initializeSSE();
     startLocationWatch();
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      if (locationWatchRef.current) {
-        locationWatchRef.current.remove();
-      }
+      eventSourceRef.current?.close();
+      locationWatchRef.current?.remove();
     };
   }, []);
 
   if (locationPermissionDenied) {
     return (
       <View style={styles.container}>
-        <Text style={styles.permissionDeniedText}>Location permission denied. Please enable location services.</Text>
+        <Text style={styles.permissionDeniedText}>
+          Location permission denied. Please enable location services.
+        </Text>
       </View>
     );
   }
@@ -224,8 +251,8 @@ const Map = () => {
         showsCompass={false}
         toolbarEnabled={false}
         initialRegion={{
-          latitude: userLocation?.latitude || 12.9244,
-          longitude: userLocation?.longitude || 79.1353,
+          latitude: userLocation?.latitude || 48.9244,
+          longitude: userLocation?.longitude || 2.1353,
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         }}
@@ -237,7 +264,7 @@ const Map = () => {
               longitude: userLocation.longitude,
             }}
             title={`${userLocation.name} - ${userLocation.currentlyPlaying.name} by ${userLocation.currentlyPlaying.artist['#text']}`}
-            // @ts-ignore
+            //@ts-ignore
             imageUrl={userLocation.imageUrl}
             currentlyPlaying={userLocation.currentlyPlaying}
             lastfmProfileUrl={userLocation.lastfmProfileUrl}
@@ -252,14 +279,18 @@ const Map = () => {
               longitude: user.longitude,
             }}
             title={`${user.name} - ${user.currentlyPlaying?.name} by ${user.currentlyPlaying?.artist['#text']}`}
-            // @ts-ignore
+            //@ts-ignore
             imageUrl={user.imageUrl}
             currentlyPlaying={user.currentlyPlaying}
             lastfmProfileUrl={`https://www.last.fm/user/${user.id}`}
             username={user.name}
           />
-        ))}
+        ))
+        }
       </MapCluster>
+      <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
+        <Ionicons name="refresh" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -278,6 +309,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+  },
+  refreshButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#121212',
+    padding: 15,
+    borderRadius: 50,
+    elevation: 5,
   },
 });
 

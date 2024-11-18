@@ -1,4 +1,5 @@
 // components/GlobalChatroom.tsx
+
 import React from 'react';
 import {
   View,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
+import { filterCurseWords } from '../utils/curseWordFilter';
 
 interface Message {
   id: string;
@@ -75,7 +77,7 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
               id: data.id,
               senderId: data.senderId,
               senderName: data.senderName,
-              text: data.text,
+              text: filterCurseWords(data.text),
               timestamp: data.timestamp
             }]
           }));
@@ -97,12 +99,14 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
   sendMessage = () => {
     if (!this.state.inputText.trim() || !this.ws) return;
 
+    const filteredText = filterCurseWords(this.state.inputText.trim());
+
     const message = {
       type: 'message',
       id: Date.now().toString(),
       senderId: this.state.userId,
       senderName: this.state.userName,
-      text: this.state.inputText.trim(),
+      text: filteredText,
       timestamp: Date.now(),
       room: 'global'
     };
@@ -111,6 +115,16 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
       this.ws.send(JSON.stringify(message));
       this.setState({ inputText: '' });
     }
+  };
+
+  formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp);
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    return `${hours}:${minutes} ${ampm}`;
   };
 
   renderMessage = ({ item }: { item: Message }) => {
@@ -128,7 +142,7 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
         )}
         <Text style={styles.messageText}>{item.text}</Text>
         <Text style={styles.timestamp}>
-          {new Date(item.timestamp).toLocaleTimeString()}
+          {this.formatTimestamp(item.timestamp)}
         </Text>
       </View>
     );
@@ -194,7 +208,7 @@ const styles = StyleSheet.create({
   },
   ownMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#1ED760'
+    backgroundColor: '#D92323'
   },
   otherMessage: {
     alignSelf: 'flex-start',
@@ -219,7 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 8,
     borderTopWidth: 1,
-    borderTopColor: '#1ED760',
+    borderTopColor: '#1a1a1a',
     alignItems: 'center'
   },
   input: {
@@ -232,7 +246,7 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   sendButton: {
-    backgroundColor: '#1ED760',
+    backgroundColor: '#D92323',
     borderRadius: 25,
     width: 40,
     height: 40,
