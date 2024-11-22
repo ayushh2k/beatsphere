@@ -9,7 +9,7 @@
     "scheme": "beatsphere",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/logo.jpg",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#121212"
     },
