@@ -8,6 +8,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import LoginWithLastFM from "@/components/LoginWithLastFM";
 import * as SecureStore from 'expo-secure-store';
 import { useFonts } from 'expo-font';
+import * as Linking from 'expo-linking';
+import { getMobileSession, getUserInfo } from '../utils/lastFmHelpers';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,7 +30,40 @@ export default function Index() {
       }
     };
 
+    const handleOpenURL = async (event: { url: string }) => {
+      const url = event.url;
+      const token = new URL(url).searchParams.get('token');
+      if (token) {
+        try {
+          const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
+          const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret';
+          const sessionKey = await getMobileSession(token, apiKey, sharedSecret);
+          const userInfo = await getUserInfo(apiKey, sessionKey);
+          await SecureStore.setItemAsync('lastfm_username', userInfo.name);
+          const userImageUrl = userInfo.image.find((img: { size: string; }) => img.size === 'large')['#text'];
+          await SecureStore.setItemAsync('lastfm_user_image', userImageUrl);
+          await SecureStore.setItemAsync('lastfm_session_key', sessionKey);
+          setIsLoggedIn(true);
+          router.replace('/home');
+        } catch (error) {
+          console.error('Failed to get mobile session:', error);
+        }
+      }
+    };
+
     checkLoginStatus();
+
+    const listener = Linking.addEventListener('url', handleOpenURL);
+
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleOpenURL({ url });
+      }
+    });
+
+    return () => {
+      listener.remove();
+    };
   }, []);
 
   if (isLoggedIn) {

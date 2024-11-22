@@ -1,28 +1,42 @@
 {
   "expo": {
-    "name": "beatsphere",
+    "name": "Beatsphere",
     "slug": "beatsphere",
     "version": "1.0.0",
     "orientation": "portrait",
     "newArchEnabled": false,
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo.jpg",
     "scheme": "beatsphere",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#121212"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/logo.jpg",
         "backgroundColor": "#ffffff"
       },
       "newArchEnabled": false,
-      "package": "com.beatsphere.beatsphere"
+      "package": "com.beatsphere.beatsphere",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "beatsphere"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

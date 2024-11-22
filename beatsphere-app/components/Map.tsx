@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Text, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -248,6 +248,8 @@ const Map = () => {
       <MapCluster
         ref={mapRef}
         style={styles.map}
+        provider={PROVIDER_GOOGLE}
+        clusterColor='#D92323'
         customMapStyle={mapStyle}
         showsCompass={false}
         toolbarEnabled={false}

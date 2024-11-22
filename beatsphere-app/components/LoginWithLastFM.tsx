@@ -13,7 +13,8 @@ const { width } = Dimensions.get('window');
 export default function LoginWithLastFM() {
   const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
   const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret';
-  const redirectUri = 'exp://192.168.115.201:8081';
+  // const redirectUri = 'exp://192.168.115.200:8081';
+  const redirectUri = 'beatsphere://';
 
   const buttonScale = new Animated.Value(1);
 

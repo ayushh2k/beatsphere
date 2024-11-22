@@ -57,17 +57,19 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
   };
 
   function handleCalloutPress(event: CalloutPressEvent): void {
-    router.push("/chat")
+    if (lastfmProfileUrl) {
+      handleOpenURL(lastfmProfileUrl);
+    }
   }
 
   return (
     <Marker coordinate={coordinate} title={title}>
-      {/* <View style={styles.markerContainer}>
+      <View style={styles.markerContainer}>
         {imageUrl && (
           <Image source={{ uri: imageUrl }} style={styles.markerImage} resizeMode='cover'/>
         )}
-      </View> */}
-      {/* <Callout  onPress={handleCalloutPress}>
+      </View>
+      <Callout onPress={handleCalloutPress}>
         <View style={styles.calloutContainer}>
           <Text style={styles.calloutTitle}>{username}</Text>
           {currentlyPlaying ? (
@@ -78,72 +80,87 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
               <Text style={styles.calloutSubtitle}>
                 {currentlyPlaying.artist['#text']}
               </Text>
-              <Svg width={180} height={110}>
+              <Svg style={styles.calloutImage} width={180} height={125}>
                 <ImageSvg
                   href={{ uri: extralargeImageUrl }}
                   width={'100%'}
                   height={'100%'}
                   preserveAspectRatio="xMidYMid slice"
-                // style={styles.calloutImage}
                 />
               </Svg>
               <Text style={styles.calloutLink}>
-                Tap to chat
+                Go to profile
               </Text>
             </>
           ) : (
             <Text>No track is currently playing</Text>
           )}
         </View>
-      </Callout> */}
-      {/* <Callout > 
-        <Text>Hii</Text>
-      </Callout> */}
+      </Callout>
     </Marker>
   );
 };
 
 const styles = StyleSheet.create({
+  calloutStyle: {
+    color: 'red',
+  },
   markerContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 25,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderWidth: 2,
+    borderColor: '#D92323',
   },
   markerImage: {
-    width: 35,
-    height: 35,
-    borderRadius: 17
+    width: 36,
+    height: 36,
+    borderRadius: 22.5,
+  },
+  calloutImage: {
+    borderRadius: 20
   },
   calloutContainer: {
     width: 200,
-    height: 700,
     padding: 10,
+    backgroundColor: '#121212',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   calloutTitle: {
-    fontWeight: 'bold',
-    fontSize: 10,
-    marginBottom: 0,
+    fontFamily: 'AvenirNextLTPro-Bold',
+    fontSize: 14,
+    marginBottom: 5,
     textAlign: 'center',
+    color: '#ffff',
   },
   calloutSubtitle: {
-    fontSize: 8,
+    fontSize: 12,
+    fontFamily: 'AvenirNextLTPro-Bold',
     marginBottom: 2,
     textAlign: 'center',
-  },
-  calloutImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 5,
-    marginBottom: 10,
+    color: '#cccccc',
   },
   calloutLink: {
-    color: 'blue',
+    color: '#D92323',
     textAlign: 'center',
-    marginTop: 5,
-    fontSize: 10,
+    marginTop: 4,
+    fontSize: 12,
+    // fontWeight: 'bold',
+    fontFamily: 'AvenirNextLTPro-Bold',
+    // textDecorationLine: 'underline',
   },
 });
 
