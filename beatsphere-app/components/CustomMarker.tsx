@@ -1,8 +1,7 @@
 // components/CustomMarker.tsx
 
-import { router } from 'expo-router';
 import React from 'react';
-import { View, Image, StyleSheet, Text, Linking } from 'react-native';
+import { View, Image, StyleSheet, Text, Linking, TouchableOpacity, Animated } from 'react-native';
 import { Marker, Callout, CalloutPressEvent } from 'react-native-maps';
 import { Svg, Image as ImageSvg } from 'react-native-svg';
 
@@ -39,8 +38,6 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
   username,
 }) => {
   const fallbackImage = 'https://placehold.co/50';
-
-  // Extract the extralarge image URL
   const extralargeImageUrl = currentlyPlaying?.image.find(img => img.size === 'extralarge')?.['#text'] || fallbackImage;
 
   const handleOpenURL = async (url: string) => {
@@ -56,17 +53,17 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
     }
   };
 
-  function handleCalloutPress(event: CalloutPressEvent): void {
+  const handleCalloutPress = (event: CalloutPressEvent) => {
     if (lastfmProfileUrl) {
       handleOpenURL(lastfmProfileUrl);
     }
-  }
+  };
 
   return (
     <Marker coordinate={coordinate} title={title}>
       <View style={styles.markerContainer}>
         {imageUrl && (
-          <Image source={{ uri: imageUrl }} style={styles.markerImage} resizeMode='cover'/>
+          <Image source={{ uri: imageUrl }} style={styles.markerImage} resizeMode='cover' />
         )}
       </View>
       <Callout onPress={handleCalloutPress}>
@@ -74,12 +71,8 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
           <Text style={styles.calloutTitle}>{username}</Text>
           {currentlyPlaying ? (
             <>
-              <Text style={styles.calloutSubtitle}>
-                {currentlyPlaying.name}
-              </Text>
-              <Text style={styles.calloutSubtitle}>
-                {currentlyPlaying.artist['#text']}
-              </Text>
+              <Text style={styles.calloutSubtitle}>{currentlyPlaying.name}</Text>
+              <Text style={styles.calloutSubtitle}>{currentlyPlaying.artist['#text']}</Text>
               <Svg style={styles.calloutImage} width={180} height={125}>
                 <ImageSvg
                   href={{ uri: extralargeImageUrl }}
@@ -88,12 +81,12 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
                   preserveAspectRatio="xMidYMid slice"
                 />
               </Svg>
-              <Text style={styles.calloutLink}>
-                Go to profile
-              </Text>
+              <TouchableOpacity onPress={() => handleOpenURL(lastfmProfileUrl || '')}>
+                <Text style={styles.calloutLink}>Go to profile</Text>
+              </TouchableOpacity>
             </>
           ) : (
-            <Text>No track is currently playing</Text>
+            <Text style={styles.calloutSubtitle}>No track is currently playing</Text>
           )}
         </View>
       </Callout>
@@ -102,9 +95,6 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
 };
 
 const styles = StyleSheet.create({
-  calloutStyle: {
-    color: 'red',
-  },
   markerContainer: {
     width: 40,
     height: 40,
@@ -125,9 +115,6 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 22.5,
   },
-  calloutImage: {
-    borderRadius: 20
-  },
   calloutContainer: {
     width: 200,
     padding: 10,
@@ -141,26 +128,28 @@ const styles = StyleSheet.create({
   },
   calloutTitle: {
     fontFamily: 'AvenirNextLTPro-Bold',
-    fontSize: 14,
+    fontSize: 16,
     marginBottom: 5,
     textAlign: 'center',
-    color: '#ffff',
+    color: '#fff',
   },
   calloutSubtitle: {
-    fontSize: 12,
     fontFamily: 'AvenirNextLTPro-Bold',
+    fontSize: 14,
     marginBottom: 2,
     textAlign: 'center',
     color: '#cccccc',
+  },
+  calloutImage: {
+    borderRadius: 10,
+    marginVertical: 10,
   },
   calloutLink: {
     color: '#D92323',
     textAlign: 'center',
     marginTop: 4,
-    fontSize: 12,
-    // fontWeight: 'bold',
+    fontSize: 14,
     fontFamily: 'AvenirNextLTPro-Bold',
-    // textDecorationLine: 'underline',
   },
 });
 

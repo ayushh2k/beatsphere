@@ -1,11 +1,7 @@
 // components/LoginWithLastFM.tsx
 
-import React, { useEffect } from 'react';
-import { TouchableOpacity, Text, Linking, View, StyleSheet, Dimensions, Animated, Image } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMobileSession, getUserInfo } from '../utils/lastFmHelpers';
-import { router } from 'expo-router';
+import React from 'react';
+import { TouchableOpacity, Text, Linking, View, StyleSheet, Dimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
@@ -13,7 +9,6 @@ const { width } = Dimensions.get('window');
 export default function LoginWithLastFM() {
   const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
   const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET || 'default_shared_secret';
-  // const redirectUri = 'exp://192.168.115.200:8081';
   const redirectUri = 'beatsphere://';
 
   const buttonScale = new Animated.Value(1);
@@ -22,38 +17,6 @@ export default function LoginWithLastFM() {
     const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(redirectUri)}`;
     Linking.openURL(authUrl);
   };
-
-  useEffect(() => {
-    const handleOpenURL = async (event: { url: string }) => {
-      const url = event.url;
-      const token = new URL(url).searchParams.get('token');
-      if (token) {
-        try {
-          const sessionKey = await getMobileSession(token, apiKey, sharedSecret);
-          const userInfo = await getUserInfo(apiKey, sessionKey);
-          await SecureStore.setItemAsync('lastfm_username', userInfo.name);
-          const userImageUrl = userInfo.image.find((img: { size: string; }) => img.size === 'large')['#text'];
-          await SecureStore.setItemAsync('lastfm_user_image', userImageUrl);
-          await AsyncStorage.setItem('lastfm_profile_url', userInfo.url);
-          router.replace('/home');
-        } catch (error) {
-          console.error('Failed to get mobile session:', error);
-        }
-      }
-    };
-
-    const listener = Linking.addListener('url', handleOpenURL);
-
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleOpenURL({ url });
-      }
-    });
-
-    return () => {
-      listener.remove();
-    };
-  }, []);
 
   const handlePressIn = () => {
     Animated.spring(buttonScale, {

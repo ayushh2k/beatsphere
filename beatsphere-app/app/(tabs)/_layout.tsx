@@ -3,7 +3,7 @@
 import { Tabs, Redirect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, SafeAreaView, Linking } from 'react-native';
 import "../../global.css";
 
 const TabsLayout = () => {
@@ -17,10 +17,19 @@ const TabsLayout = () => {
     <SafeAreaView style={styles.drawerContent}>
       <Text style={styles.appName}>BeatSphere</Text>
       <Text style={styles.version}>Version 1.0.0</Text>
-      <Text style={styles.supportEmail}>Support: support@beatsphere.com</Text>
-      <Text style={styles.privacyPolicy}>Privacy Policy</Text>
-      <Text style={styles.termsOfService}>Terms of Service</Text>
-      <Text style={styles.about}>About Us</Text>
+      <TouchableOpacity onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}>
+        <Text style={styles.drawerItem}>How to Connect Spotify</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/#features')}>
+        <Text style={styles.drawerItem}>Features</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/terms')}>
+        <Text style={styles.drawerItem}>Terms of Service</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/privacy')}>
+        <Text style={styles.drawerItem}>Privacy Policy</Text>
+      <Text style={styles.supportEmail}>support@beatsphere.com</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 
@@ -69,6 +78,7 @@ const TabsLayout = () => {
             </TouchableOpacity>
           ),
         }}
+        initialRouteName="home"
       >
         <Tabs.Screen
           name="home"
@@ -146,6 +156,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
     padding: 20,
   },
+  supportEmail: {
+    fontSize: 16,
+    color: '#aaa',
+    marginTop: 20,
+  },
   appName: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -154,25 +169,11 @@ const styles = StyleSheet.create({
   },
   version: {
     fontSize: 16,
+    marginTop: 20,
     color: '#aaa',
     marginBottom: 10,
   },
-  supportEmail: {
-    fontSize: 16,
-    color: '#aaa',
-    marginBottom: 10,
-  },
-  privacyPolicy: {
-    fontSize: 16,
-    color: '#aaa',
-    marginBottom: 10,
-  },
-  termsOfService: {
-    fontSize: 16,
-    color: '#aaa',
-    marginBottom: 10,
-  },
-  about: {
+  drawerItem: {
     fontSize: 16,
     color: '#aaa',
     marginBottom: 10,

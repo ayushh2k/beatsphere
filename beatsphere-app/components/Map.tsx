@@ -14,7 +14,6 @@ import EventSource from 'react-native-event-source';
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
 import { Ionicons } from '@expo/vector-icons';
 
-// const BACKEND_URL = 'http://192.168.115.201:3000';
 const BACKEND_URL = 'https://34.47.235.85.nip.io';
 
 interface UserLocation {
@@ -45,7 +44,7 @@ const Map = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [otherUsers, setOtherUsers] = useState<UserLocation[]>([]);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
-  const mapRef = useRef(null);
+  const mapRef = useRef<MapView | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
   const appStateRef = useRef(AppState.currentState);
@@ -80,7 +79,7 @@ const Map = () => {
     eventSource.addEventListener('error', (error) => {
       console.error('SSE Error:', error);
       eventSource.close();
-      setTimeout(initializeSSE, 5000);
+      setTimeout(initializeSSE, 30000);
     });
 
     eventSourceRef.current = eventSource;
@@ -97,7 +96,7 @@ const Map = () => {
       return;
     }
 
-    if (now - lastLocationUpdateRef.current < 5000) return;
+    if (now - lastLocationUpdateRef.current < 30000) return;
     lastLocationUpdateRef.current = now;
 
     const userId = await SecureStore.getItemAsync('lastfm_username');
@@ -219,7 +218,7 @@ const Map = () => {
       }
     };
 
-    const interval = setInterval(checkCurrentlyPlaying, 5000);
+    const interval = setInterval(checkCurrentlyPlaying, 30000);
     return () => clearInterval(interval);
   }, [userLocation]);
 
@@ -288,8 +287,7 @@ const Map = () => {
             lastfmProfileUrl={`https://www.last.fm/user/${user.id}`}
             username={user.name}
           />
-        ))
-        }
+        ))}
       </MapCluster>
       <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
         <Ionicons name="refresh" size={24} color="#fff" />

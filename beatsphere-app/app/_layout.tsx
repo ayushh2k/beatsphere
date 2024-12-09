@@ -9,6 +9,16 @@ global.Buffer = Buffer;
 
 SplashScreen.preventAutoHideAsync();
 
+export const unstable_settings = {
+  // Ensure any route can link back to `/`
+  initialRouteName: "index",
+
+  tabs: { // <= important!
+    initialRouteName: "home", // <= important!
+  },
+};
+
+
 export default function RootLayout() {
   const [fontsLoaded, error] = useFonts({
     "AvenirNextLTPro-Bold": require("../assets/fonts/AvenirNextLTPro-Bold.otf"),
@@ -44,6 +54,11 @@ export default function RootLayout() {
           title: 'Beat Sphere',
         }
       } name='index' />
+      <Stack.Screen options={
+        {
+          title: 'Home',
+        }
+      } name='(tabs)' />
     </Stack>
   );
 }

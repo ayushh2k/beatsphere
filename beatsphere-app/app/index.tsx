@@ -1,7 +1,7 @@
 // app/index.tsx
 
 import React, { useEffect, useState } from "react";
-import { Text, View, StyleSheet, Dimensions, Image } from "react-native";
+import { Text, View, StyleSheet, Dimensions, Image, TouchableOpacity } from "react-native";
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,7 +26,7 @@ export default function Index() {
       const accessToken = await SecureStore.getItemAsync('lastfm_session_key');
       if (accessToken) {
         setIsLoggedIn(true);
-        router.replace('/home');
+        router.replace('/(tabs)/home');
       }
     };
 
@@ -44,7 +44,7 @@ export default function Index() {
           await SecureStore.setItemAsync('lastfm_user_image', userImageUrl);
           await SecureStore.setItemAsync('lastfm_session_key', sessionKey);
           setIsLoggedIn(true);
-          router.replace('/home');
+          router.replace('/(tabs)/home');
         } catch (error) {
           console.error('Failed to get mobile session:', error);
         }
@@ -61,13 +61,20 @@ export default function Index() {
       }
     });
 
+    const interval = setInterval(checkLoginStatus, 1000); // Check every 5 seconds
+
     return () => {
       listener.remove();
+      clearInterval(interval);
     };
   }, []);
 
+  const handleManualRedirect = () => {
+    router.replace('/(tabs)/home');
+  };
+
   if (isLoggedIn) {
-    return <Redirect href="/home" />;
+    return <Redirect href="/(tabs)/home" />;
   }
 
   if (!fontsLoaded) {
@@ -82,6 +89,11 @@ export default function Index() {
           <Image source={require('../assets/images/logo.jpg')} style={styles.logo} />
           <Text style={styles.appName}>BeatSphere</Text>
           <LoginWithLastFM />
+          {isLoggedIn && (
+            <TouchableOpacity onPress={handleManualRedirect} style={styles.manualButton}>
+              <Text style={styles.manualButtonText}>Go to Home</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
     </View>
@@ -116,5 +128,15 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 5,
+  },
+  manualButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#D92323',
+    borderRadius: 5,
+  },
+  manualButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'AvenirNextLTPro-Bold',
   },
 });

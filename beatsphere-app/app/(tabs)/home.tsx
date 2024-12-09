@@ -1,11 +1,13 @@
 // app/(tabs)/home.tsx
+
 import React, { useEffect, useState, useRef } from 'react';
-import { Text, View, ScrollView, FlatList } from 'react-native';
+import { Text, View, ScrollView, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentlyPlayingTrack, getTopAlbums, getRecentTracks } from '../../utils/lastFmHelpers';
 import SongCard from '@/components/SongCard';
 import AlbumCard from '@/components/AlbumCard';
+import { Ionicons } from '@expo/vector-icons';
 
 interface LastFmUser {
   name: string;
@@ -51,10 +53,13 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+
+  const lastFm_Key = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_key';
 
   const fetchCurrentlyPlayingTrack = async () => {
     try {
-      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
+      const lastfmApiKey = lastFm_Key;
       const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
       const username = await SecureStore.getItemAsync('lastfm_username');
 
@@ -71,7 +76,7 @@ const Home = () => {
 
   const fetchTopAlbums = async () => {
     try {
-      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
+      const lastfmApiKey = lastFm_Key;
       const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
       const username = await SecureStore.getItemAsync('lastfm_username');
 
@@ -88,7 +93,7 @@ const Home = () => {
 
   const fetchRecentTracks = async () => {
     try {
-      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
+      const lastfmApiKey = lastFm_Key;
       const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
       const username = await SecureStore.getItemAsync('lastfm_username');
 
@@ -103,42 +108,57 @@ const Home = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key';
-        const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-        const username = await SecureStore.getItemAsync('lastfm_username');
+  const fetchData = async () => {
+    try {
+      const lastfmApiKey = lastFm_Key;
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+      const username = await SecureStore.getItemAsync('lastfm_username');
 
-        if (!sessionKey || !username) {
-          throw new Error('Last.fm session key or username is missing');
-        }
+      if (!sessionKey || !username) {
+        throw new Error('Last.fm session key or username is missing');
+      }
 
-        const userResponse = await fetch(
-          `http://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=${lastfmApiKey}&sk=${sessionKey}&format=json`
-        );
+      const userResponse = await fetch(
+        `https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=${lastfmApiKey}&sk=${sessionKey}&format=json`
+      );
 
-        if (!userResponse.ok) {
-          throw new Error('Failed to fetch user info');
-        }
+      if (!userResponse.ok) {
+        throw new Error('Failed to fetch user info');
+      }
 
-        const userData = await userResponse.json();
-        setUserInfo(userData.user);
+      const userData = await userResponse.json();
+      setUserInfo(userData.user);
 
-        await fetchCurrentlyPlayingTrack();
-        await fetchTopAlbums();
-        await fetchRecentTracks();
+      await fetchCurrentlyPlayingTrack();
+      await fetchTopAlbums();
+      await fetchRecentTracks();
 
-        intervalRef.current = setInterval(fetchCurrentlyPlayingTrack, 15 * 1000);
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-        setError('Failed to fetch data');
-      } finally {
+      intervalRef.current = setInterval(fetchCurrentlyPlayingTrack, 15 * 1000);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      setError('Failed to fetch data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const retryFetchData = async () => {
+    try {
+      await fetchData();
+    } catch (error) {
+      if (retryCountRef.current < 5) {
+        retryCountRef.current += 1;
+        setTimeout(retryFetchData, 1000); // Retry after 1 second
+      } else {
+        console.error('Failed to fetch data after multiple retries:', error);
+        setError('Failed to fetch data after multiple retries');
         setLoading(false);
       }
-    };
+    }
+  };
 
-    fetchData();
+  useEffect(() => {
+    retryFetchData();
 
     return () => {
       if (intervalRef.current) {
@@ -147,21 +167,11 @@ const Home = () => {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView className="bg-primary flex-1 items-center justify-center">
-        <Text className="text-xl font-aregular color-green">Loading...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView className="bg-primary flex-1 items-center justify-center">
-        <Text className="text-xl font-aregular color-green">Error: {error}</Text>
-      </SafeAreaView>
-    );
-  }
+  const handleRefresh = async () => {
+    setLoading(true);
+    retryCountRef.current = 0;
+    await retryFetchData();
+  };
 
   return (
     <SafeAreaView className="bg-primary flex-1 items-center justify-center">
@@ -198,8 +208,27 @@ const Home = () => {
           ))}
         </View>
       </ScrollView>
+      <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+        <Ionicons name="refresh" size={24} color="#fff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  refreshButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    backgroundColor: '#D92323',
+    borderRadius: 30,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+});
 
 export default Home;

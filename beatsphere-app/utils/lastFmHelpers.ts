@@ -5,7 +5,7 @@ import { stringMd5 } from 'react-native-quick-md5';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const LASTFM_API_URL = 'https://ws.audioscrobbler.com/2.0/';
+const LASTFM_API_URL = 'http://ws.audioscrobbler.com/2.0/';
 
 export const getMobileSession = async (token: string, apiKey: string, sharedSecret: string) => {
   const method = 'auth.getSession';
@@ -14,12 +14,15 @@ export const getMobileSession = async (token: string, apiKey: string, sharedSecr
     token,
     api_key: apiKey,
   };
+  // console.log(token)
+
 
   const sortedParams = Object.keys(params)
     .sort()
     .map(key => `${key}${params[key as keyof typeof params]}`)
     .join('');
   const apiSig = stringMd5(sortedParams + sharedSecret);
+  // console.log(apiSig)
 
   try {
     const response = await axios.get(LASTFM_API_URL, {
@@ -34,7 +37,7 @@ export const getMobileSession = async (token: string, apiKey: string, sharedSecr
     await SecureStore.setItemAsync('lastfm_session_key', sessionKey);
     return sessionKey;
   } catch (error) {
-    console.error('Failed to get mobile session:', error);
+    console.error('Failed to get mobile session helper:', error);
     throw error;
   }
 };
