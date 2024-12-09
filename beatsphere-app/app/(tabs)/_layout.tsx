@@ -17,19 +17,31 @@ const TabsLayout = () => {
     <SafeAreaView style={styles.drawerContent}>
       <Text style={styles.appName}>BeatSphere</Text>
       <Text style={styles.version}>Version 1.0.0</Text>
-      <TouchableOpacity onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}>
+      <TouchableOpacity
+        onPress={() => Linking.openURL('https://community.spotify.com/t5/FAQs/How-can-I-connect-Spotify-to-Last-fm/ta-p/4795301')}
+        style={styles.drawerButton}
+      >
         <Text style={styles.drawerItem}>How to Connect Spotify</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/#features')}>
+      <TouchableOpacity
+        onPress={() => Linking.openURL('https://beatsphere.vercel.app/#features')}
+        style={styles.drawerButton}
+      >
         <Text style={styles.drawerItem}>Features</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/terms')}>
+      <TouchableOpacity
+        onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/terms')}
+        style={styles.drawerButton}
+      >
         <Text style={styles.drawerItem}>Terms of Service</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/privacy')}>
+      <TouchableOpacity
+        onPress={() => Linking.openURL('https://beatsphere.vercel.app/legal/privacy')}
+        style={styles.drawerButton}
+      >
         <Text style={styles.drawerItem}>Privacy Policy</Text>
-      <Text style={styles.supportEmail}>support@beatsphere.com</Text>
       </TouchableOpacity>
+      <Text style={styles.supportEmail}>beatsphere@gmail.com</Text>
     </SafeAreaView>
   );
 
@@ -74,7 +86,7 @@ const TabsLayout = () => {
           headerTitleAlign: 'center',
           headerLeft: () => (
             <TouchableOpacity onPress={toggleDrawer} style={styles.hamburgerIcon}>
-              <Ionicons name="menu-outline" size={24} color="#fff" />
+              <Ionicons name="menu-outline" size={28} color="#fff" />
             </TouchableOpacity>
           ),
         }}
@@ -176,7 +188,15 @@ const styles = StyleSheet.create({
   drawerItem: {
     fontSize: 16,
     color: '#aaa',
+    // marginBottom: 10,
+    padding: 5
+  },
+  drawerButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
     marginBottom: 10,
+    backgroundColor: '#333',
   },
 });
 

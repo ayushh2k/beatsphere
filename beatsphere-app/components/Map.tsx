@@ -1,7 +1,7 @@
 // components/Map.tsx
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Text, AppState, AppStateStatus, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
@@ -47,7 +47,6 @@ const Map = () => {
   const mapRef = useRef<MapView | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
-  const appStateRef = useRef(AppState.currentState);
   const lastLocationUpdateRef = useRef<number>(0);
 
   const initializeSSE = async () => {
@@ -175,23 +174,24 @@ const Map = () => {
     await startLocationWatch();
   };
 
+  const handleShowUserLocation = () => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      });
+    }
+  };
+
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        initializeSSE();
-        startLocationWatch();
-      } else if (nextAppState.match(/inactive|background/)) {
-        eventSourceRef.current?.close();
-        locationWatchRef.current?.remove();
-      }
-      appStateRef.current = nextAppState;
-    });
+    initializeSSE();
+    startLocationWatch();
 
     return () => {
-      subscription.remove();
+      eventSourceRef.current?.close();
+      locationWatchRef.current?.remove();
     };
   }, []);
 
@@ -222,16 +222,6 @@ const Map = () => {
     return () => clearInterval(interval);
   }, [userLocation]);
 
-  useEffect(() => {
-    initializeSSE();
-    startLocationWatch();
-
-    return () => {
-      eventSourceRef.current?.close();
-      locationWatchRef.current?.remove();
-    };
-  }, []);
-
   if (locationPermissionDenied) {
     return (
       <View style={styles.container}>
@@ -255,8 +245,8 @@ const Map = () => {
         initialRegion={{
           latitude: userLocation?.latitude || 48.9244,
           longitude: userLocation?.longitude || 2.1353,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitudeDelta: 20,
+          longitudeDelta: 20,
         }}
       >
         {userLocation && userLocation.currentlyPlaying && (
@@ -292,6 +282,9 @@ const Map = () => {
       <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
         <Ionicons name="refresh" size={24} color="#fff" />
       </TouchableOpacity>
+      <TouchableOpacity style={styles.locationButton} onPress={handleShowUserLocation}>
+        <Ionicons name="locate" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -315,6 +308,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
+    backgroundColor: '#121212',
+    padding: 15,
+    borderRadius: 50,
+    elevation: 5,
+  },
+  locationButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
     backgroundColor: '#121212',
     padding: 15,
     borderRadius: 50,

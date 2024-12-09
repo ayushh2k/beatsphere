@@ -107,6 +107,14 @@ app.get('/api/locations/stream', (req, res) => {
 app.post('/api/location', async (req, res) => {
   try {
     const { id, latitude, longitude, imageUrl, name, currentlyPlaying } = req.body;
+
+    if (!id || typeof id !== 'string') {
+      return res.status(400).send({ error: 'Invalid or missing user ID' });
+    }
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return res.status(400).send({ error: 'Invalid or missing latitude/longitude' });
+    }
+
     const newLocation = {
       id,
       name: name || 'User',
@@ -114,6 +122,7 @@ app.post('/api/location', async (req, res) => {
       longitude,
       imageUrl: imageUrl || undefined,
       currentlyPlaying: currentlyPlaying || null,
+      lastUpdated: Date.now(),
     };
 
     await producer.send({
@@ -229,6 +238,20 @@ app.ws('/chat', (ws, req) => {
     }
   });
 });
+
+const checkUserStatus = async () => {
+  const now = Date.now();
+  userLocations = userLocations.filter(location => {
+    if (!location.currentlyPlaying || now - location.lastUpdated > 300000) {
+      return false;
+    }
+    return true;
+  });
+
+  sendEventsToAll(userLocations);
+};
+
+setInterval(checkUserStatus, 300000);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

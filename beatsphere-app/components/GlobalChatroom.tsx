@@ -80,7 +80,9 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
               text: filterCurseWords(data.text),
               timestamp: data.timestamp
             }]
-          }));
+          }), () => {
+            this.flatListRef?.scrollToEnd({ animated: true });
+          });
         }
       };
 

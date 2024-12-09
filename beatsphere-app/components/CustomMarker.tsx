@@ -1,9 +1,10 @@
 // components/CustomMarker.tsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Image, StyleSheet, Text, Linking, TouchableOpacity, Animated } from 'react-native';
 import { Marker, Callout, CalloutPressEvent } from 'react-native-maps';
 import { Svg, Image as ImageSvg } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 interface CustomMarkerProps {
   coordinate: {
@@ -37,6 +38,7 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
   lastfmProfileUrl,
   username,
 }) => {
+  const [scaleValue] = useState(new Animated.Value(1));
   const fallbackImage = 'https://placehold.co/50';
   const extralargeImageUrl = currentlyPlaying?.image.find(img => img.size === 'extralarge')?.['#text'] || fallbackImage;
 
@@ -59,14 +61,34 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
     }
   };
 
+  const handleMarkerPress = () => {
+    Animated.sequence([
+      Animated.timing(scaleValue, {
+        toValue: 1.2,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleValue, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   return (
-    <Marker coordinate={coordinate} title={title}>
-      <View style={styles.markerContainer}>
+    <Marker
+      coordinate={coordinate}
+      title={title}
+      onPress={handleMarkerPress}
+      tracksViewChanges={false}
+    >
+      <Animated.View style={[styles.markerContainer, { transform: [{ scale: scaleValue }] }]}>
         {imageUrl && (
           <Image source={{ uri: imageUrl }} style={styles.markerImage} resizeMode='cover' />
         )}
-      </View>
-      <Callout onPress={handleCalloutPress}>
+      </Animated.View>
+      <Callout tooltip onPress={handleCalloutPress}>
         <View style={styles.calloutContainer}>
           <Text style={styles.calloutTitle}>{username}</Text>
           {currentlyPlaying ? (
@@ -82,7 +104,10 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
                 />
               </Svg>
               <TouchableOpacity onPress={() => handleOpenURL(lastfmProfileUrl || '')}>
-                <Text style={styles.calloutLink}>Go to profile</Text>
+                <View style={styles.calloutButton}>
+                  <Ionicons name="person" size={16} color="#fff" />
+                  <Text style={styles.calloutButtonText}>Go to profile</Text>
+                </View>
               </TouchableOpacity>
             </>
           ) : (
@@ -144,10 +169,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginVertical: 10,
   },
-  calloutLink: {
-    color: '#D92323',
-    textAlign: 'center',
-    marginTop: 4,
+  calloutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D92323',
+    padding: 8,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  calloutButtonText: {
+    color: '#fff',
+    marginLeft: 5,
     fontSize: 14,
     fontFamily: 'AvenirNextLTPro-Bold',
   },
