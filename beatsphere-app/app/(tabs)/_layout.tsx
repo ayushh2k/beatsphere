@@ -41,7 +41,7 @@ const TabsLayout = () => {
       >
         <Text style={styles.drawerItem}>Privacy Policy</Text>
       </TouchableOpacity>
-      <Text style={styles.supportEmail}>beatsphere@gmail.com</Text>
+      <Text style={styles.supportEmail}>beatspherecommunity@gmail.com</Text>
     </SafeAreaView>
   );
 
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   supportEmail: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#aaa',
     marginTop: 20,
   },

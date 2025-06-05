@@ -30,7 +30,7 @@ const DrawerContent = () => {
         onPress={() => navigation.navigate('profile')}
       />
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Version 1.0.0</Text>
+        <Text style={styles.footerText}>Version 1.1.0</Text>
         <Text style={styles.footerText}>Support: support@beatsphere.com</Text>
         <Text style={styles.footerText}>Privacy Policy</Text>
         <Text style={styles.footerText}>Terms of Service</Text>

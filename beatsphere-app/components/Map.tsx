@@ -14,7 +14,7 @@ import EventSource from 'react-native-event-source';
 import { getUserInfo, getCurrentlyPlayingTrack } from '../utils/lastFmHelpers';
 import { Ionicons } from '@expo/vector-icons';
 
-const BACKEND_URL = 'https://34.47.235.85.nip.io';
+const BACKEND_URL = 'https://beatsphere-backend.onrender.com';
 
 interface UserLocation {
   id: string;
@@ -123,7 +123,8 @@ const Map = () => {
     setUserLocation(locationData);
 
     try {
-      await axios.post(`${BACKEND_URL}/api/location`, locationData);
+      // await axios.post(`${BACKEND_URL}/api/location`, locationData);
+      await axios.post(`https://beatsphere-backend.onrender.com/api/location`, locationData);
     } catch (error) {
       console.error('Failed to update location:', error);
     }
@@ -259,7 +260,7 @@ const Map = () => {
             //@ts-ignore
             imageUrl={userLocation.imageUrl}
             currentlyPlaying={userLocation.currentlyPlaying}
-            lastfmProfileUrl={userLocation.lastfmProfileUrl}
+            lastfmProfileUrl={`https://www.last.fm/user/${userLocation.username}`}
             username={userLocation.username}
           />
         )}
