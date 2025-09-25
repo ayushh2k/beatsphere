@@ -1,9 +1,16 @@
 // utils/curseWordFilter.ts
 
 const curseWords = [
-    'fuck', 'shit', 'bitch', 'asshole', 'cunt', 'dick', 'pussy', 'nigger', 'nigga', 'faggot', 'retard', 'slut', 'whore'
+    'fuck', 'bitch', 'cunt', 'dick', 'pussy', 
+    'nigger', 'nigga', 'faggot', 'retard', 'slut', 'whore', 'cock'
 ];
 
+/**
+ * Replaces curse words in a string with '***'.
+ * It matches whole words only (case-insensitive).
+ * @param text The input string to filter.
+ * @returns The filtered string.
+ */
 export const filterCurseWords = (text: string): string => {
     let filteredText = text;
     curseWords.forEach(word => {

@@ -1,14 +1,24 @@
 // app/(tabs)/chat.tsx
-import React from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import GlobalChatroom from '@/components/GlobalChatroom';
 
-const Chat = () => {
+import React from 'react';
+import { StatusBar, View, StyleSheet } from 'react-native';
+import GlobalChatroom from '../../components/GlobalChatroom';
+
+const ChatScreen = () => {
   return (
-    <SafeAreaView className="bg-primary flex-1 items-center justify-center">
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#121212"/>
       <GlobalChatroom />
-    </SafeAreaView>
+    </View>
   );
 };
 
-export default Chat;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0F0F0F',
+  },
+});
+
+export default ChatScreen;
+

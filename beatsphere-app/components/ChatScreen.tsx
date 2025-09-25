@@ -63,6 +63,7 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
 
       if (!this.ws) {
         this.ws = new WebSocket(`wss://beatsphere-backend.onrender.com/chat`);
+        // this.ws = new WebSocket(`ws://192.168.1.6:3000/chat`);
 
         this.ws.onopen = () => {
           if (this.ws) {
@@ -76,7 +77,6 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
         this.ws.onmessage = (event) => {
           const message = JSON.parse(event.data);
           
-          // Handle messages that are part of this conversation
           if (
             (message.senderId === this.props.receiverId && message.receiverId === this.state.userId) ||
             (message.senderId === this.state.userId && message.receiverId === this.props.receiverId)
@@ -118,7 +118,6 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
         ...message,
       }));
 
-      // Update local state immediately
       this.setState((prevState: ChatScreenState) => ({
         messages: [...prevState.messages, message],
         inputText: '',

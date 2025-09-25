@@ -1,79 +1,86 @@
 // components/CustomMarker.tsx
 
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
-  Image,
   StyleSheet,
   Text,
   Linking,
-  TouchableOpacity,
+  // Image,
   Animated,
 } from "react-native";
-import { Marker, Callout, CalloutPressEvent } from "react-native-maps";
-import { Svg, Image as ImageSvg } from "react-native-svg";
+import { Marker, Callout } from "react-native-maps";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  Svg,
+  Image as ImageSvg,
+  // Image,
+  Defs,
+  Rect,
+  ClipPath,
+} from "react-native-svg";
 
 interface CustomMarkerProps {
   coordinate: {
     latitude: number;
     longitude: number;
   };
-  title: string;
-  imageUrl?: string;
-  currentlyPlaying?: {
-    name: string;
-    artist: {
-      "#text": string;
-    };
-    album: {
-      "#text": string;
-    };
-    image: {
-      "#text": string;
-      size: string;
-    }[];
-  } | null;
+  latitude: number;
+  longitude: number;
+  imageUrl?: string | null;
+  currentlyPlaying?: any;
   lastfmProfileUrl?: string;
   username?: string;
+  tracksViewChanges?: boolean;
+  id?: string;
+  listeningStatus?: "live" | "recent";
 }
+
+const DefaultAvatar = ({ username }: { username: string }) => {
+  const initial = username ? username.charAt(0).toUpperCase() : "?";
+  const hashCode = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return hash;
+  };
+  const colors = ["#D92323", "#4A90E2", "#50E3C2", "#F5A623", "#BD10E0"];
+  const color = colors[Math.abs(hashCode(username || "")) % colors.length];
+  return (
+    <View
+      style={[
+        styles.markerImage,
+        {
+          backgroundColor: color,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+      ]}
+    >
+      <Text style={styles.avatarInitial}>{initial}</Text>
+    </View>
+  );
+};
 
 const CustomMarker: React.FC<CustomMarkerProps> = ({
   coordinate,
-  title,
+  // latitude,
+  // longitude,
   imageUrl,
   currentlyPlaying,
-  lastfmProfileUrl,
   username,
+  id,
+  tracksViewChanges,
+  listeningStatus,
 }) => {
-  const [scaleValue] = useState(new Animated.Value(1));
-  const fallbackImage = "https://placehold.co/50";
-  const extralargeImageUrl =
-    currentlyPlaying?.image.find((img) => img.size === "extralarge")?.[
-      "#text"
-    ] || fallbackImage;
-
-  const handleOpenURL = async (url: string) => {
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      try {
-        await Linking.openURL(url);
-      } catch (error) {
-        console.error("Failed to open URL:", error);
-      }
-    } else {
-      console.error("Cannot open URL:", url);
-    }
-  };
-
-  const handleCalloutPress = (event: CalloutPressEvent) => {
-    // console.log('Callout pressed. lastfmProfileUrl:', lastfmProfileUrl); // Log this
-    if (lastfmProfileUrl) {
-      handleOpenURL(lastfmProfileUrl);
-    } else {
-      console.log("lastfmProfileUrl is undefined or empty, not opening.");
-    }
-  };
+  const scaleValue = React.useRef(new Animated.Value(1)).current;
+  const lastfmProfileUrl = `https://www.last.fm/user/${id}`;
+  const albumArtUrl = currentlyPlaying?.image?.find(
+    (img: any) => img.size === "large"
+  )?.["#text"];
+  const borderColor = listeningStatus === "live" ? "#D92323" : "#989898";
 
   const handleMarkerPress = () => {
     Animated.sequence([
@@ -92,55 +99,96 @@ const CustomMarker: React.FC<CustomMarkerProps> = ({
 
   return (
     <Marker
+      // coordinate={{ latitude, longitude }}
       coordinate={coordinate}
-      title={title}
-      onPress={handleMarkerPress}
-      tracksViewChanges={false}
+      tracksViewChanges={tracksViewChanges}
+      // onPress={handleMarkerPress}
     >
       <Animated.View
-        style={[styles.markerContainer, { transform: [{ scale: scaleValue }] }]}
+        style={[
+          styles.markerContainer,
+          { transform: [{ scale: scaleValue }], borderColor: borderColor },
+        ]}
       >
-        {imageUrl && (
+        {imageUrl ? (
           <Image
             source={{ uri: imageUrl }}
             style={styles.markerImage}
-            resizeMode="cover"
+            contentFit="cover"
+            // transition={300}
+            cachePolicy="disk"
           />
+        ) : (
+          // <Image
+          //   source={{ uri: imageUrl }}
+          //   style={styles.markerImage}
+          //   resizeMode="cover"
+          // />
+          <DefaultAvatar username={username || ""} />
         )}
       </Animated.View>
-      <Callout tooltip onPress={handleCalloutPress}>
+      <Callout tooltip onPress={() => Linking.openURL(lastfmProfileUrl)}>
         <View style={styles.calloutContainer}>
-          <Text style={styles.calloutTitle}>{username}</Text>
-          {currentlyPlaying ? (
-            <>
-              <Text style={styles.calloutSubtitle}>
-                {currentlyPlaying.name}
-              </Text>
-              <Text style={styles.calloutSubtitle}>
-                {currentlyPlaying.artist["#text"]}
-              </Text>
-              <Svg style={styles.calloutImage} width={180} height={125}>
-                <ImageSvg
-                  href={{ uri: extralargeImageUrl }}
-                  width={"100%"}
-                  height={"100%"}
-                  preserveAspectRatio="xMidYMid slice"
-                />
-              </Svg>
-              <TouchableOpacity
-                onPress={() => handleOpenURL(lastfmProfileUrl || "")}
-              >
-                <View style={styles.calloutButton}>
-                  <Ionicons name="person" size={16} color="#fff" />
-                  <Text style={styles.calloutButtonText}>Go to profile</Text>
-                </View>
-              </TouchableOpacity>
-            </>
+          {albumArtUrl ? (
+            <Image
+              source={{ uri: albumArtUrl }}
+              style={styles.calloutImage}
+              cachePolicy="disk"
+              contentFit="cover"
+              // transition={300}
+            />
           ) : (
-            <Text style={styles.calloutSubtitle}>
-              No track is currently playing
-            </Text>
+            // <Image
+            //   source={{ uri: albumArtUrl }}
+            //   style={styles.calloutImage}
+            //   resizeMode="cover"
+            // />
+            // <Svg style={styles.calloutImage}>
+            //   <Defs>
+            //     <ClipPath id="clip">
+            //       <Rect
+            //         x="0"
+            //         y="0"
+            //         width="100%"
+            //         height="100%"
+            //         rx={8} // border radius
+            //         ry={8}
+            //       />
+            //     </ClipPath>
+            //   </Defs>
+            //   <ImageSvg
+            //     href={{ uri: albumArtUrl }}
+            //     width={"100%"}
+            //     height={"100%"}
+            //     preserveAspectRatio="xMidYMid slice"
+            //     clipPath="url(#clip)"
+            //   />
+            // </Svg>
+            <View style={[styles.calloutImage, styles.calloutImagePlaceholder]}>
+              <Ionicons
+                name="musical-notes-outline"
+                size={32}
+                color="#4A4A4A"
+              />
+            </View>
           )}
+          <View style={styles.textContainer}>
+            <Text style={styles.calloutUsername} numberOfLines={1}>
+              {username}
+            </Text>
+            <Text style={styles.calloutSong} numberOfLines={1}>
+              {currentlyPlaying?.name || "..."}
+            </Text>
+            <Text style={styles.calloutArtist} numberOfLines={1}>
+              {currentlyPlaying?.artist["#text"] || "..."}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward-outline"
+            size={24}
+            color="#4A4A4A"
+            style={styles.arrowIcon}
+          />
         </View>
       </Callout>
     </Marker>
@@ -151,67 +199,63 @@ const styles = StyleSheet.create({
   markerContainer: {
     width: 40,
     height: 40,
-    borderRadius: 25,
+    borderRadius: 20,
     backgroundColor: "white",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    borderWidth: 2,
-    borderColor: "#D92323",
+    borderWidth: 3,
+    // borderColor: "#D92323",
   },
   markerImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 22.5,
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+  avatarInitial: {
+    fontSize: 18,
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
   calloutContainer: {
-    width: 200,
-    padding: 10,
-    backgroundColor: "#121212",
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  calloutTitle: {
-    fontFamily: "AvenirNextLTPro-Bold",
-    fontSize: 16,
-    marginBottom: 5,
-    textAlign: "center",
-    color: "#fff",
-  },
-  calloutSubtitle: {
-    fontFamily: "AvenirNextLTPro-Bold",
-    fontSize: 14,
-    marginBottom: 2,
-    textAlign: "center",
-    color: "#cccccc",
-  },
-  calloutImage: {
-    borderRadius: 10,
-    marginVertical: 10,
-  },
-  calloutButton: {
+    width: 260,
+    padding: 12,
+    backgroundColor: "#181818",
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#282828",
+  },
+  calloutImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  calloutImagePlaceholder: {
+    backgroundColor: "#282828",
     justifyContent: "center",
-    backgroundColor: "#D92323",
-    padding: 8,
-    borderRadius: 5,
-    marginTop: 10,
+    alignItems: "center",
   },
-  calloutButtonText: {
-    color: "#fff",
-    marginLeft: 5,
-    fontSize: 14,
+  textContainer: { flex: 1 },
+  calloutUsername: {
     fontFamily: "AvenirNextLTPro-Bold",
+    fontSize: 14,
+    color: "#A0A0A0",
   },
+  calloutSong: {
+    fontFamily: "AvenirNextLTPro-Bold",
+    fontSize: 16,
+    color: "#FFFFFF",
+    marginTop: 2,
+  },
+  calloutArtist: {
+    fontFamily: "AvenirNextLTPro-Regular",
+    fontSize: 14,
+    color: "#A0A0A0",
+    marginTop: 2,
+  },
+  arrowIcon: { marginLeft: 10 },
 });
 
 export default CustomMarker;

@@ -1,6 +1,4 @@
-// components/GlobalChatroom.tsx
-
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +8,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { filterCurseWords } from '../utils/curseWordFilter';
+import ChatProfileCallout from './ChatProfileCallout';
 
+// --- Type Definitions ---
 interface Message {
   id: string;
   senderId: string;
@@ -23,284 +25,217 @@ interface Message {
   text: string;
   timestamp: number;
   isSystemMessage?: boolean;
+  senderImage?: string;
 }
 
-interface GlobalChatroomState {
-  messages: Message[];
-  inputText: string;
-  userId: string;
-  userName: string;
-  onlineUsersCount: number | null;
-  isConnecting: boolean;
-  messageToSendOnConnect: string | null; // Stores the text of a message if send is clicked while disconnected
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+interface TypingIndicator {
+  isTyping: boolean;
+  message: string;
 }
 
-const HEALTH_CHECK_URL = 'https://beatsphere-backend.onrender.com/health';
+interface UserInfo {
+  id: string;
+  name: string;
+  image?: string | null;
+}
+
+// --- Constants ---
 const WEBSOCKET_URL = 'wss://beatsphere-backend.onrender.com/chat';
+// const WEBSOCKET_URL = 'wss://backend-beatsphere.onrender.com/chat';
+// const WEBSOCKET_URL = 'ws://192.168.1.6:3000/chat';
 
-class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
-  state: GlobalChatroomState = {
-    messages: [],
-    inputText: '',
-    userId: '',
-    userName: '',
-    onlineUsersCount: null,
-    isConnecting: false,
-    messageToSendOnConnect: null,
+const DefaultAvatar = ({ username, style }: { username: string, style?: object }) => {
+  const initial = username ? username.charAt(0).toUpperCase() : '?';
+  const hashCode = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return hash;
   };
+  const colors = ["#D92323", "#4A90E2", "#50E3C2", "#F5A623", "#BD10E0"];
+  const color = colors[Math.abs(hashCode(username || "")) % colors.length];
 
-  ws: WebSocket | null = null;
-  flatListRef: FlatList<Message> | null = null;
-  healthInterval: NodeJS.Timeout | null = null;
+  return (
+    <View style={[styles.avatar, style, { backgroundColor: color, justifyContent: 'center', alignItems: 'center' }]}>
+      <Text style={styles.avatarInitial}>{initial}</Text>
+    </View>
+  );
+};
 
-  componentDidMount() {
-    // Set initial connecting state and attempt to connect
-    this.setState({ isConnecting: true });
-    this.initChat();
-    this.fetchHealthData();
-    this.healthInterval = setInterval(this.fetchHealthData, 30000);
-  }
+// --- Main Component ---
+const GlobalChatroom = () => {
+  // --- State Management ---
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [typingIndicator, setTypingIndicator] = useState<TypingIndicator>({ isTyping: false, message: '' });
+  const [selectedUser, setSelectedUser] = useState<Message | null>(null);
 
-  componentWillUnmount() {
-    if (this.ws) {
-      // Clean up WebSocket listeners to prevent memory leaks
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
-      this.ws.close();
-      this.ws = null;
-    }
-    if (this.healthInterval) {
-      clearInterval(this.healthInterval);
-    }
-  }
+  // --- Refs for managing instances and state ---
+  const ws = useRef<WebSocket | null>(null);
+  const flatListRef = useRef<FlatList<Message>>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageQueueRef = useRef<string | null>(null);
+  const userInfoRef = useRef<UserInfo | null>(null);
+  const sessionKeyRef = useRef<string | null>(null);
+  const typingIndicatorAnim = useRef(new Animated.Value(0)).current;
 
-  fetchHealthData = async () => {
-    try {
-      const response = await fetch(HEALTH_CHECK_URL);
-      if (!response.ok) {
-        console.warn(`Health check failed: ${response.status}`);
-        // Keep old count or set to 0 if first time failing
-        this.setState(prevState => ({ onlineUsersCount: prevState.onlineUsersCount ?? 0 }));
-        return;
-      }
-      const data = await response.json();
-      this.setState({ onlineUsersCount: data.wsGlobalClients });
-    } catch (error) {
-      console.error('Failed to fetch health data:', error);
-      this.setState(prevState => ({ onlineUsersCount: prevState.onlineUsersCount ?? 0 }));
-    }
-  };
+  // --- Core Logic ---
+  useEffect(() => {
+    initializeUserAndConnect();
+    return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      ws.current?.close();
+    };
+  }, []);
 
-  initChat = async () => {
-    // Clean up any existing WebSocket instance and its listeners before creating a new one
-    if (this.ws) {
-      this.ws.onopen = null;
-      this.ws.onmessage = null;
-      this.ws.onerror = null;
-      this.ws.onclose = null;
-      this.ws.close();
-      this.ws = null;
-    }
-    
-    this.setState({ isConnecting: true }); // Signal that a connection attempt is starting/active
+  useEffect(() => {
+    Animated.timing(typingIndicatorAnim, {
+      toValue: typingIndicator.isTyping ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [typingIndicator.isTyping]);
 
-    try {
-      const currentUserId = await SecureStore.getItemAsync('lastfm_username');
-      const displayName = await SecureStore.getItemAsync('display_name') || currentUserId;
-
-      if (!currentUserId) {
-        console.error('User ID (lastfm_username) not found in SecureStore.');
-        this.addSystemMessage('Could not initialize chat. User ID is missing. Please log in again.', `error-no-userid-${Date.now()}`);
-        this.setState({ isConnecting: false });
-        return;
-      }
-
-      this.setState({ userId: currentUserId, userName: displayName || currentUserId });
-      this.ws = new WebSocket(WEBSOCKET_URL);
-
-      this.ws.onopen = () => {
-        console.log('WebSocket connected');
-        if (!this.ws) return;
-
-        this.ws.send(JSON.stringify({
-          type: 'join',
-          userId: this.state.userId,
-          room: 'global'
-        }));
-        
-        const welcomeMessage: Message = {
-            id: `system-welcome-${Date.now()}`,
-            senderId: 'system',
-            senderName: 'System',
-            text: `Welcome to Global Chat, ${this.state.userName}! ✨`,
-            timestamp: Date.now(),
-            isSystemMessage: true,
-        };
-
-        this.setState(prevState => ({
-          messages: [welcomeMessage, ...prevState.messages.filter(m =>
-            !m.id.startsWith('system-welcome-') &&
-            m.id !== 'system-disconnected' &&
-            m.id !== 'system-attempt-reconnect' &&
-            !m.id.startsWith('system-error-') &&
-            !m.id.startsWith('system-init-error-')
-          )],
-          isConnecting: false,
-        }), () => {
-          this.flatListRef?.scrollToOffset({ offset: 0, animated: true });
-
-          const { messageToSendOnConnect, userId, userName } = this.state;
-          if (messageToSendOnConnect && this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log('Sending queued message:', messageToSendOnConnect);
-            const message = {
-              type: 'message',
-              id: `${userId}-${Date.now()}`,
-              senderId: userId,
-              senderName: userName,
-              text: messageToSendOnConnect,
-              timestamp: Date.now(),
-              room: 'global'
-            };
-            this.ws.send(JSON.stringify(message));
-            this.setState({ messageToSendOnConnect: null });
-            this.addSystemMessage('Your queued message has been sent.', `queued-sent-${Date.now()}`);
-          }
-        });
-      };
-
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data as string);
-          if (data.type === 'globalMessage') {
-            const newMessage: Message = {
-              id: data.id,
-              senderId: data.senderId,
-              senderName: data.senderName,
-              text: filterCurseWords(data.text),
-              timestamp: data.timestamp
-            };
-            this.setState(prevState => ({
-              messages: [...prevState.messages, newMessage]
-            }), () => this.flatListRef?.scrollToEnd({ animated: true }));
-          } else if (data.type === 'userJoined' || data.type === 'userLeft') {
-            this.addSystemMessage(data.message, `system-${data.type}-${data.id || Date.now()}`);
-            this.fetchHealthData();
-          } else if (data.type === 'chatHistory' && Array.isArray(data.messages)) {
-            const historyMessages: Message[] = data.messages.map((msg: any) => ({
-                ...msg,
-                text: filterCurseWords(msg.text)
-            }));
-            this.setState(prevState => ({
-                messages: [...historyMessages, ...prevState.messages.filter(m => m.isSystemMessage && !historyMessages.find(hm => hm.id === m.id))]
-            }), () => this.flatListRef?.scrollToEnd({animated: false}));
-          }
-        } catch (e) {
-          console.error("Error parsing WebSocket message or updating state:", e, event.data);
-        }
-      };
-
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        const errorId = `system-error-${Date.now()}`;
-        if (!this.state.messages.find(m => m.id.startsWith('system-error-') && (Date.now() - m.timestamp < 5000))) {
-            this.addSystemMessage('Connection error. If you had a pending message, it was not sent.', errorId);
-        }
-        this.setState({ isConnecting: false });
-      };
-
-      this.ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
-        this.ws = null; 
-        if (!event.wasClean && !this.state.messageToSendOnConnect &&
-            !this.state.messages.find(m => m.id === 'system-disconnected' && (Date.now() - m.timestamp < 10000))) {
-          this.addSystemMessage('Disconnected from chat.', 'system-disconnected');
-        }
-        this.setState({ isConnecting: false }); 
-      };
-    } catch (error) {
-      console.error('Error initializing chat:', error);
-      this.addSystemMessage('Failed to initialize chat. Please check your connection.', `init-error-${Date.now()}`);
-      this.setState({ isConnecting: false });
-    }
-  };
-
-  addSystemMessage = (text: string, id: string) => {
+  // --- Helper Functions ---
+  const addSystemMessage = (text: string, idPrefix = 'system') => {
     const systemMessage: Message = {
-      id,
+      id: `${idPrefix}-${Date.now()}`,
       senderId: 'system',
       senderName: 'System',
       text,
       timestamp: Date.now(),
       isSystemMessage: true,
     };
-    this.setState(prevState => {
-        const existingMsgIndex = prevState.messages.findIndex(m => m.id === id);
-        if (existingMsgIndex !== -1 && id === 'system-attempt-reconnect') { 
-            const updatedMessages = [...prevState.messages.filter(m => m.id !== id), systemMessage];
-            return { messages: updatedMessages };
-        } else if (existingMsgIndex === -1) {
-            return { messages: [...prevState.messages, systemMessage] };
-        }
-        return null; 
-    }, () => this.flatListRef?.scrollToEnd({ animated: true }));
+    setMessages(prev => [...prev, systemMessage]);
   };
 
-  sendMessage = () => {
-    // Destructure only state properties
-    const { inputText, userId, userName, isConnecting, messageToSendOnConnect } = this.state;
-    // Access this.ws directly
-    const currentWs = this.ws;
+  const initializeUserAndConnect = async () => {
+    try {
+      const id = await SecureStore.getItemAsync('lastfm_username');
+      const name = await SecureStore.getItemAsync('display_name') || id;
+      const image = await SecureStore.getItemAsync('lastfm_user_image');
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
 
-    if (!inputText.trim()) {
-      return;
+      if (!id || !name || !sessionKey) {
+        addSystemMessage('Could not start chat. User credentials not found. ❌');
+        setConnectionStatus('disconnected');
+        return;
+      }
+      userInfoRef.current = { id, name, image };
+      sessionKeyRef.current = sessionKey;
+      
+      connect(0);
+    } catch (error) {
+      console.error('Failed to get user info:', error);
+      addSystemMessage('An error occurred while fetching your user data.');
     }
-    if (!userId) {
-      this.addSystemMessage('Cannot send message: User information is missing.', `send-error-nouser-${Date.now()}`);
-      return;
-    }
+  };
 
-    const filteredText = filterCurseWords(inputText.trim());
 
-    if (currentWs && currentWs.readyState === WebSocket.OPEN) {
-      const message = {
-        type: 'message',
-        id: `${userId}-${Date.now()}`,
-        senderId: userId,
-        senderName: userName,
-        text: filteredText,
-        timestamp: Date.now(),
-        room: 'global'
-      };
-      currentWs.send(JSON.stringify(message));
-      this.setState({ inputText: '', messageToSendOnConnect: null }); // Clear any pending message as well
+  const connect = (retryCount: number) => {
+    const sessionKey = sessionKeyRef.current;
+    if (!userInfoRef.current || !sessionKey || ws.current?.readyState === WebSocket.OPEN) return;
+
+    setConnectionStatus(retryCount === 0 ? 'connecting' : 'reconnecting');
+    const message = retryCount === 0 ? 'Connecting to chat... 📡' : 'Connection lost. Reconnecting... 🔌';
+    addSystemMessage(message);
+
+    const authenticatedUrl = `${WEBSOCKET_URL}?token=${sessionKey}`;
+    ws.current = new WebSocket(authenticatedUrl);
+
+    ws.current.onopen = () => {
+      setConnectionStatus('connected');
+      addSystemMessage('Connection established. Welcome! ✅');
+      ws.current?.send(JSON.stringify({
+        type: 'join',
+        senderId: userInfoRef.current!.id,
+        senderName: userInfoRef.current!.name,
+        senderImage: userInfoRef.current!.image,
+      }));
+      if (messageQueueRef.current) {
+        sendMessage(messageQueueRef.current);
+        messageQueueRef.current = null;
+      }
+    };
+
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      switch (data.type) {
+        case 'globalMessage':
+          setMessages(prev => [...prev, { ...data, text: filterCurseWords(data.text) }]);
+          break;
+        case 'userCountUpdate':
+          setOnlineCount(data.count);
+          break;
+        case 'typingUpdate':
+          const { users = [] } = data;
+          const otherTypers = users.filter((typer: UserInfo) => typer.id !== userInfoRef.current?.id);
+          let indicatorMessage = '';
+          if (otherTypers.length === 1) {
+            indicatorMessage = `${otherTypers[0].name} is typing...`;
+          } else if (otherTypers.length > 1) {
+            indicatorMessage = 'Several people are typing...';
+          }
+          setTypingIndicator({ isTyping: otherTypers.length > 0, message: indicatorMessage });
+          break;
+      }
+    };
+
+    ws.current.onclose = () => {
+      setTypingIndicator({ isTyping: false, message: '' });
+      if (connectionStatus !== 'disconnected') {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Exponential backoff
+        reconnectTimeoutRef.current = setTimeout(() => connect(retryCount + 1), delay);
+      }
+    };
+  };
+
+  const handleSendPress = () => {
+    if (!inputText.trim()) return;
+    sendMessage(inputText);
+    setInputText('');
+  };
+
+  const sendMessage = (text: string) => {
+    if (!userInfoRef.current) return;
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      const filteredText = filterCurseWords(text.trim());
+      ws.current.send(JSON.stringify({ type: 'message', text: filteredText }));
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      sendTyping(false);
     } else {
-      // WebSocket is not open. Queue the message and attempt to connect.
-      this.setState({
-        inputText: '', // Clear input field
-        messageToSendOnConnect: filteredText, // Store the message to be sent on connect
-      });
-      
-      this.addSystemMessage('Connection unavailable. Attempting to send your message...', 'system-attempt-reconnect');
-      
-      if (!isConnecting) { // Only try to initChat if not already in the process of connecting
-        this.initChat();
+      messageQueueRef.current = text;
+      addSystemMessage('Message queued. Will send upon reconnection.');
+      if (connectionStatus !== 'reconnecting' && connectionStatus !== 'connecting') {
+        connect(0);
       }
     }
   };
 
-  formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    return `${hours}:${minutes} ${ampm}`;
+  const sendTyping = (isTyping: boolean) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: 'typing', isTyping }));
+    }
   };
 
-  renderMessage = ({ item }: { item: Message }) => {
+  const handleInputChange = (text: string) => {
+    setInputText(text);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    sendTyping(text.length > 0);
+    if (text.length > 0) {
+      typingTimeoutRef.current = setTimeout(() => sendTyping(false), 2000);
+    }
+  };
+  
+  // --- UI Rendering ---
+  const renderMessage = ({ item }: { item: Message }) => {
     if (item.isSystemMessage) {
       return (
         <View style={styles.systemMessageContainer}>
@@ -308,115 +243,104 @@ class GlobalChatroom extends React.Component<{}, GlobalChatroomState> {
         </View>
       );
     }
+    const isOwnMessage = item.senderId === userInfoRef.current?.id;
+    if (isOwnMessage) {
+      // Render own messages without an avatar
+      return (
+        <View style={[styles.messageBubble, styles.ownMessage]}>
+          <Text style={styles.messageText}>{item.text}</Text>
+          <Text style={styles.timestamp}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+        </View>
+      );
+    }
 
-    const isOwnMessage = item.senderId === this.state.userId;
-
+    // Render other users messages with an avatar
     return (
-      <View
-        style={[
-          styles.messageBubble,
-          isOwnMessage ? styles.ownMessage : styles.otherMessage
-        ]}
-      >
-        {!isOwnMessage && (
+      <View style={styles.otherMessageContainer}>
+        <TouchableOpacity onPress={() => setSelectedUser(item)}>
+          {item.senderImage ? (
+            <Image source={{ uri: item.senderImage }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <DefaultAvatar username={item.senderName} />
+          )}
+        </TouchableOpacity>
+        <View style={[styles.messageBubble, styles.otherMessage]}>
           <Text style={styles.senderName}>{item.senderName}</Text>
-        )}
-        <Text style={styles.messageText}>{item.text}</Text>
-        <Text style={styles.timestamp}>
-          {this.formatTimestamp(item.timestamp)}
-        </Text>
+          <Text style={styles.messageText}>{item.text}</Text>
+          <Text style={styles.timestamp}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+        </View>
       </View>
     );
   };
 
-  render() {
-    const { messages, inputText, onlineUsersCount, isConnecting, userId, messageToSendOnConnect } = this.state;
-
-    const isInputEditable = !!userId && !(isConnecting && !!messageToSendOnConnect);
-    const isSendButtonDisabled = !inputText.trim() || !userId || (isConnecting && !!messageToSendOnConnect);
-    const showSpinnerOnButton = isConnecting && !!messageToSendOnConnect;
-
+  const renderHeader = () => {
+    const statusColor = { connected: '#2ECC71', connecting: '#F39C12', reconnecting: '#F39C12', disconnected: '#E74C3C' }[connectionStatus];
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={styles.header}>
+        <View style={styles.headerTitleContainer}>
+          <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
           <Text style={styles.headerTitle}>Global Chat</Text>
-          {onlineUsersCount !== null ? (
-            <Text style={styles.onlineCount}>
-              {onlineUsersCount} {onlineUsersCount === 1 ? 'user' : 'users'} online
-            </Text>
-          ) : (
-            <ActivityIndicator size="small" color="#fff" style={styles.onlineCountLoader} />
-          )}
         </View>
-
-        {isConnecting && messages.length === 0 && !messageToSendOnConnect && (
-            <View style={styles.connectingContainer}>
-                <ActivityIndicator size="large" color="#D92323" />
-                <Text style={styles.connectingText}>Connecting to chat...</Text>
-            </View>
-        )}
-
-        <FlatList
-          ref={(ref) => this.flatListRef = ref as FlatList<Message> | null}
-          data={[...messages].sort((a, b) => a.timestamp - b.timestamp)}
-          renderItem={this.renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messagesList}
-          inverted={false} 
-          onContentSizeChange={() => {
-            if (this.flatListRef && messages.length > 0) {
-                 this.flatListRef.scrollToEnd({animated: true});
-            }
-          }}
-          onLayout={() => {
-             if (this.flatListRef && messages.length > 0) {
-                 this.flatListRef.scrollToEnd({animated: false});
-             }
-          }}
-        />
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-        >
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={(text) => this.setState({ inputText: text })}
-              placeholder="Type a message..."
-              placeholderTextColor="#888"
-              multiline
-              maxLength={500}
-              editable={isInputEditable}
-            />
-            <TouchableOpacity
-              onPress={this.sendMessage}
-              style={[
-                styles.sendButton,
-                isSendButtonDisabled && styles.sendButtonDisabled
-              ]}
-              disabled={isSendButtonDisabled}
-            >
-              {showSpinnerOnButton ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="send" size={20} color="white" />
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+        <Text style={styles.onlineCount}>{onlineCount > 0 ? `${onlineCount} Online` : ''}</Text>
       </View>
     );
-  }
-}
+  };
 
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
+      {connectionStatus === 'connecting' && messages.length <= 1 && (
+        <View style={styles.fullScreenLoader}><ActivityIndicator size="large" color="#D92323" /></View>
+      )}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.messagesList}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <Animated.View style={[styles.typingIndicatorContainer, { opacity: typingIndicatorAnim, transform: [{ translateY: typingIndicatorAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
+          <Text style={styles.typingIndicatorText}>{typingIndicator.message}</Text>
+        </Animated.View>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={handleInputChange}
+            placeholder="Type a message..."
+            placeholderTextColor="#888"
+            multiline
+            editable={connectionStatus === 'connected'}
+          />
+          <TouchableOpacity
+            onPress={handleSendPress}
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            disabled={!inputText.trim()}>
+            <Ionicons name="send" size={20} color="white" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+      <ChatProfileCallout
+        user={selectedUser}
+        isVisible={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
+    </View>
+  );
+};
+
+// --- Stylesheet ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F0F0F',
-    width: '100%'
-  },
+  container: { flex: 1, backgroundColor: '#0F0F0F' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -427,34 +351,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#282828',
   },
-  headerTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  onlineCount: {
-    color: '#A0A0A0',
-    fontSize: 14,
-  },
-  onlineCountLoader: {
-    marginRight: 5,
-  },
-  connectingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 50, 
-  },
-  connectingText: {
-    marginTop: 10,
-    color: '#AAA',
-    fontSize: 16,
-  },
-  messagesList: {
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    flexGrow: 1, 
-  },
+  headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+  statusIndicator: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  onlineCount: { color: '#A0A0A0', fontSize: 14 },
+  fullScreenLoader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  messagesList: { paddingHorizontal: 10, paddingVertical: 10, flexGrow: 1 },
   systemMessageContainer: {
     alignSelf: 'center',
     marginVertical: 8,
@@ -463,54 +365,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
     borderRadius: 10,
   },
-  systemMessageText: {
-    color: '#B0B0B0',
-    fontSize: 13,
-    fontStyle: 'italic',
-    textAlign: 'center'
-  },
+  systemMessageText: { color: '#B0B0B0', fontSize: 13, fontStyle: 'italic' },
   messageBubble: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 18,
-    marginVertical: 4, 
-    maxWidth: '80%',
-    minWidth: '20%', 
   },
-  ownMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#D92323',
+  ownMessage: { 
+    alignSelf: 'flex-end', 
+    backgroundColor: '#D92323', 
     borderBottomRightRadius: 5,
+    marginVertical: 4,
+    maxWidth: '80%',
   },
-  otherMessage: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#262626',
+  otherMessage: { 
+    backgroundColor: '#262626', 
     borderBottomLeftRadius: 5,
   },
-  senderName: {
-    color: '#A0A0A0', 
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginBottom: 3,
-  },
-  messageText: {
-    color: 'white',
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  timestamp: {
-    color: '#ffffff', 
-    fontSize: 10,
-    marginTop: 5,
-    alignSelf: 'flex-end',
-  },
+  senderName: { color: '#A0A0A0', fontSize: 13, fontWeight: 'bold', marginBottom: 3 },
+  messageText: { color: 'white', fontSize: 15, lineHeight: 20 },
+  timestamp: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 5, alignSelf: 'flex-end' },
   inputContainer: {
     flexDirection: 'row',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#282828',
-    alignItems: 'flex-end', 
+    alignItems: 'flex-end',
     backgroundColor: '#181818',
   },
   input: {
@@ -521,7 +402,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 10 : 8,
     paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     minHeight: 40,
-    maxHeight: 100, 
+    maxHeight: 100,
     color: 'white',
     marginRight: 8,
     fontSize: 15,
@@ -534,9 +415,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendButtonDisabled: {
-    opacity: 0.4,
+  sendButtonDisabled: { opacity: 0.4 },
+  typingIndicatorContainer: {
+    height: 20,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    backgroundColor: '#181818',
+  },
+  typingIndicatorText: { color: '#A0A0A0', fontStyle: 'italic' },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 8,
+  },
+  avatarInitial: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  otherMessageContainer: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'flex-end',
+    marginVertical: 4,
+    maxWidth: '85%',
   },
 });
 
 export default GlobalChatroom;
+

@@ -1,186 +1,161 @@
 // app/(tabs)/profile.tsx
 
 import React, { useEffect, useState } from 'react';
-import { Text, View, Image, TouchableOpacity, Linking, StyleSheet, ScrollView } from 'react-native';
+import { 
+  Text, 
+  View, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Linking, 
+  ActivityIndicator, 
+  ScrollView,
+  Image
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUserInfo, getRecentTracks, getTopAlbums } from '../../utils/lastFmHelpers';
-import { router } from 'expo-router';
+
+import { getUserInfo } from '../../utils/lastFmHelpers';
 
 interface LastFmUser {
   name: string;
-  image: {
-    '#text': string;
-    size: string;
-  }[];
+  image: { '#text': string; size: string; }[];
   url: string;
-  country: string;
   playcount: string;
 }
 
-interface LastFmTrack {
-  name: string;
-  artist: {
-    '#text': string;
-  };
-  playcount: string;
-  url: string;
-}
+const DefaultAvatar = ({ username }: { username: string }) => {
+    const initial = username ? username.charAt(0).toUpperCase() : '?';
+    const hashCode = (str: string) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return hash;
+    };
+    const colors = ['#D92323', '#4A90E2', '#50E3C2', '#F5A623', '#BD10E0'];
+    const color = colors[Math.abs(hashCode(username || '')) % colors.length];
 
-interface LastFmAlbum {
-  name: string;
-  artist: {
-    name: string;
-  };
-  playcount: string;
-  url: string;
-  image: {
-    '#text': string;
-    size: string;
-  }[];
-}
+    return (
+        <View style={[styles.profileImage, { backgroundColor: color, justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={styles.avatarInitial}>{initial}</Text>
+        </View>
+    );
+};
 
 const Profile = () => {
   const [userInfo, setUserInfo] = useState<LastFmUser | null>(null);
-  const [recentTracks, setRecentTracks] = useState<LastFmTrack[]>([]);
-  const [topAlbums, setTopAlbums] = useState<LastFmAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchUserInfo = async () => {
-      const lastfmApiKey = process.env.EXPO_PUBLIC_LASTFM_KEY || 'default_api_key'; // Provide a fallback value
-      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-      const username = await SecureStore.getItemAsync('lastfm_username');
-
-      if (sessionKey && username) {
-        try {
-          // Check if user info is cached in AsyncStorage
-          const cachedUserInfo = await AsyncStorage.getItem('lastfm_user_info');
-          if (cachedUserInfo) {
-            setUserInfo(JSON.parse(cachedUserInfo));
-            setLoading(false);
-            return;
-          }
-
-          const userInfo = await getUserInfo(lastfmApiKey, sessionKey);
-
-          // Cache the user info in AsyncStorage
-          await AsyncStorage.setItem('lastfm_user_info', JSON.stringify(userInfo));
-
-          setUserInfo(userInfo);
-
-          // Fetch recent tracks and top albums
-          const recentTracks = await getRecentTracks(lastfmApiKey, sessionKey, username);
-          const topAlbums = await getTopAlbums(lastfmApiKey, sessionKey, username);
-
-          setRecentTracks(recentTracks);
-          setTopAlbums(topAlbums);
-        } catch (error: unknown) {
-          console.error('Failed to fetch user info:', error);
-          setError('Failed to fetch user info');
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setError('Last.fm session key or username is missing');
+  const fetchProfile = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const cachedUserInfo = await AsyncStorage.getItem('lastfm_user_info');
+      if (cachedUserInfo) {
+        setUserInfo(JSON.parse(cachedUserInfo));
         setLoading(false);
+        return;
       }
-    };
 
-    fetchUserInfo();
+      const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY;
+      const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+
+      if (!apiKey || !sessionKey) {
+          throw new Error("Credentials not found");
+      }
+
+      const data = await getUserInfo(apiKey, sessionKey);
+      await AsyncStorage.setItem('lastfm_user_info', JSON.stringify(data));
+      setUserInfo(data);
+    } catch (err: any) {
+      setError('Failed to load profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
   }, []);
 
   const handleLogout = async () => {
-    await SecureStore.deleteItemAsync('lastfm_session_key');
-    await SecureStore.deleteItemAsync('lastfm_username');
+    try {
+      await Promise.all([
+        // SecureStore items
+        SecureStore.deleteItemAsync('lastfm_session_key'),
+        SecureStore.deleteItemAsync('lastfm_username'),
+        SecureStore.deleteItemAsync('lastfm_user_image'),
 
-    await AsyncStorage.removeItem('lastfm_user_info');
+        // AsyncStorage items
+        AsyncStorage.removeItem('lastfm_user_info'),
+        AsyncStorage.removeItem('has_accepted_location_terms'),
+        AsyncStorage.removeItem('currently_playing'),
+      ]);
 
-    router.replace('/');
+      router.replace('/');
+    } catch (e) {
+      console.error("Failed to clear all data on logout:", e);
+      router.replace('/');
+    }
   };
 
   const handleEditProfile = () => {
     if (userInfo?.url) {
-      Linking.openURL(userInfo.url);
+      Linking.openURL(`${userInfo.url}`);
     }
   };
-
+  
   if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </SafeAreaView>
-    );
+    return <View style={styles.centerContainer}><ActivityIndicator size="large" color="#D92323" /></View>;
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Error: {error}</Text>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={fetchProfile}>
+           <Ionicons name="reload-outline" size={16} color="#FFFFFF" />
+           <Text style={styles.actionButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
+  const profileImageUrl = userInfo?.image?.find(img => img.size === 'extralarge')?.['#text'];
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {userInfo ? (
-          <View style={styles.profileContainer}>
-            <Image
-              source={{ uri: userInfo.image.find(img => img.size === 'extralarge')?.['#text'] || 'https://placehold.co/100x100' }}
-              style={styles.profileImage}
-            />
-            <Text style={styles.userName}>{userInfo.name}</Text>
-            <Text style={styles.userInfo}>Playcount: {userInfo.playcount}</Text>
-            {/* <Text style={styles.userInfo}>Country: {userInfo.country}</Text> */}
-            <TouchableOpacity
-              onPress={handleEditProfile}
-              style={styles.editProfileButton}
-            >
-              <Text style={styles.buttonText}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleLogout}
-              style={styles.logoutButton}
-            >
-              <Text style={styles.buttonText}>Logout</Text>
-            </TouchableOpacity>
+        
+        <View style={styles.profileCard}>
+            {profileImageUrl ? (
+                <Image
+                    source={{ uri: profileImageUrl }}
+                    style={styles.profileImage}
+                />
+            ) : (
+                <DefaultAvatar username={userInfo?.name || ''} />
+            )}
+            <Text style={styles.userName}>{userInfo?.name}</Text>
+            <Text style={styles.userPlaycount}>{Number(userInfo?.playcount || 0).toLocaleString()} scrobbles</Text>
+        </View>
 
-            {/* <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Recent Tracks</Text>
-              {recentTracks.map((track, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => Linking.openURL(track.url)}
-                  style={styles.listItem}
-                >
-                  <Text style={styles.listItemText}>{track.name} by {track.artist['#text']}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        <View style={styles.actionsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
+                <Ionicons name="open-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>View Profile on Last.fm</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
+                <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>Logout</Text>
+            </TouchableOpacity>
+        </View>
 
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Top Albums</Text>
-              {topAlbums.map((album, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => Linking.openURL(album.url)}
-                  style={styles.listItem}
-                >
-                  <Image
-                    source={{ uri: album.image.find(img => img.size === 'extralarge')?.['#text'] || 'https://placehold.co/100x100' }}
-                    style={styles.albumImage}
-                  />
-                  <Text style={styles.listItemText}>{album.name} by {album.artist.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View> */}
-          </View>
-        ) : (
-          <Text style={styles.noUserText}>No user info available</Text>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -190,95 +165,77 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#121212',
-    alignItems: 'center',
+  },
+  centerContainer: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    padding: 20,
   },
   scrollContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileContainer: {
-    alignItems: 'center',
     padding: 20,
   },
+  profileCard: {
+    backgroundColor: '#212121',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: '#282828',
+  },
   profileImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    marginBottom: 20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#D92323',
+  },
+  avatarInitial: {
+    fontSize: 60,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   userName: {
-    fontSize: 24,
-    fontFamily: 'AvenirNextLTPro-Bold',
-    // fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#ffff',
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  userInfo: {
-    fontSize: 18,
-    marginBottom: 5,
-    fontFamily: 'AvenirNextLTPro-Bold',
-    color: '#595959',
+  userPlaycount: {
+    fontSize: 16,
+    color: '#A0A0A0',
+    marginTop: 4,
   },
-  editProfileButton: {
-    backgroundColor: '#D92323',
-    fontFamily: 'AvenirNextLTPro-Bold',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 20,
+  actionsContainer: {
+    width: '100%',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#212121',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   logoutButton: {
     backgroundColor: '#D92323',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 10,
   },
-  buttonText: {
-    color: '#fff',
-    fontFamily: 'AvenirNextLTPro-Bold',
-
+  actionButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    // fontWeight: 'bold',
-  },
-  sectionContainer: {
-    marginTop: 20,
-    width: '100%',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  listItemText: {
-    fontSize: 16,
-    color: '#555',
-  },
-  albumImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#333',
+    fontWeight: '600',
+    marginLeft: 8,
   },
   errorText: {
-    fontSize: 18,
-    color: '#ff0000',
-  },
-  noUserText: {
-    fontSize: 18,
-    color: '#555',
+    fontSize: 16,
+    color: '#E74C3C',
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 

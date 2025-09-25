@@ -3,21 +3,21 @@
 import { SplashScreen, Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
-import { Buffer } from 'buffer';
+import { Buffer } from "buffer";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { StatusBar } from "expo-status-bar";
 
 global.Buffer = Buffer;
 
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  // Ensure any route can link back to `/`
   initialRouteName: "index",
 
-  tabs: { // <= important!
+  tabs: {
     initialRouteName: "home", // <= important!
   },
 };
-
 
 export default function RootLayout() {
   const [fontsLoaded, error] = useFonts({
@@ -36,29 +36,36 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{
-      headerStyle: {
-        backgroundColor: '#121212',
-      },
-      headerShown: false,
-      headerTintColor: '#ffff',
-      headerTitleAlign: 'center',
-      headerTitleStyle: {
-        fontFamily: 'AvenirNextLTPro-Bold',
-        fontSize: 24,
-        color: '#ffff',
-      },
-    }}>
-      <Stack.Screen options={
-        {
-          title: 'Beat Sphere',
-        }
-      } name='index' />
-      <Stack.Screen options={
-        {
-          title: 'Home',
-        }
-      } name='(tabs)' />
-    </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <StatusBar style="light" backgroundColor="#121212" />
+      <Stack
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: "#121212",
+          },
+          headerShown: false,
+          headerTintColor: "#ffff",
+          headerTitleAlign: "center",
+          headerTitleStyle: {
+            fontFamily: "AvenirNextLTPro-Bold",
+            fontSize: 24,
+            color: "#ffff",
+          },
+        }}
+      >
+        <Stack.Screen
+          options={{
+            title: "Beat Sphere",
+          }}
+          name="index"
+        />
+        <Stack.Screen
+          options={{
+            title: "Home",
+          }}
+          name="(tabs)"
+        />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }

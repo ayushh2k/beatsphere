@@ -1,321 +1,301 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Text, View, ScrollView, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
-import { getCurrentlyPlayingTrack, getTopAlbums, getRecentTracks } from '../../utils/lastFmHelpers';
-import SongCard from '@/components/SongCard';
-import AlbumCard from '@/components/AlbumCard';
-import { Ionicons } from '@expo/vector-icons';
+// app/(tabs)/home.tsx
 
-interface LastFmUser {
-  name: string;
-  image: {
-    '#text': string;
-  }[];
-}
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  Text,
+  View,
+  ScrollView,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as SecureStore from "expo-secure-store";
+import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 
-interface LastFmTrack {
-  name: string;
-  artist: {
-    '#text': string;
-  };
-  album?: {
-    '#text': string;
-  };
-  image: {
-    '#text': string;
-    size: string;
-  }[];
-  '@attr'?: {
-    nowplaying: string;
-  };
-}
+import {
+  getTopAlbums,
+  getRecentTracks,
+  getUserInfo,
+  getWeeklyReport,
+} from "../../utils/lastFmHelpers";
 
-interface LastFmAlbum {
-  name: string;
-  artist: {
-    name: string;
-  };
-  image: {
-    '#text': string;
-    size: string;
-  }[];
-  playcount: string;
-}
+import SongCard, { LastFmTrack } from "@/components/SongCard";
+import AlbumCard from "@/components/AlbumCard";
+import WeeklyReportCard from "@/components/WeeklyReportCard";
 
-const Home = () => {
-  const [userInfo, setUserInfo] = useState<LastFmUser | null>(null);
+const useLastFmHomeData = () => {
+  const [userInfo, setUserInfo] = useState<any>(null);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<LastFmTrack | null>(null);
-  const [topAlbums, setTopAlbums] = useState<LastFmAlbum[]>([]);
+  const [topAlbums, setTopAlbums] = useState<any[]>([]);
   const [recentTracks, setRecentTracks] = useState<LastFmTrack[]>([]);
+  const [weeklyReport, setWeeklyReport] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const retryCountRef = useRef(0);
-
-  const lastFm_Key = process.env.EXPO_PUBLIC_LASTFM_KEY;
-
-  const clearData = () => {
-    setUserInfo(null);
-    setCurrentlyPlaying(null);
-    setTopAlbums([]);
-    setRecentTracks([]);
-  };
-
-  // Fetcher for currently playing track (can be called by interval)
-  const fetchCurrentlyPlaying = useCallback(async (apiKey: string, sessionKey: string, username: string) => {
+  const loadInitialData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const track = await getCurrentlyPlayingTrack(apiKey, sessionKey, username);
-      setCurrentlyPlaying(track);
-    } catch (err) {
-      console.error('Failed to fetch currently playing track (interval/update):', err);
+      const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY;
+      const sessionKey = await SecureStore.getItemAsync("lastfm_session_key");
+      const username = await SecureStore.getItemAsync("lastfm_username");
+
+      if (!apiKey || !sessionKey || !username) {
+        throw new Error("Please log in to Last.fm to see your data.");
+      }
+
+      const [userInfoData, albumsData, recentTracksData, weeklyReportData] =
+        await Promise.all([
+          getUserInfo(apiKey, sessionKey),
+          getTopAlbums(apiKey, sessionKey, username, "1month"),
+          getRecentTracks(apiKey, sessionKey, username),
+          getWeeklyReport(),
+        ]);
+
+      setUserInfo(userInfoData);
+      setTopAlbums(albumsData || []);
+      setWeeklyReport(weeklyReportData);
+      setRecentTracks(recentTracksData || []);
+
+      const nowPlaying =
+        recentTracksData?.[0]?.["@attr"]?.nowplaying === "true"
+          ? recentTracksData[0]
+          : null;
+      setCurrentlyPlaying(nowPlaying);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch data.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-
-  // Main data loading function
-  const loadData = useCallback(async (isManualRefresh = false) => {
-    if (!isManualRefresh) {
-        setLoading(true);
-    } else {
-        setLoading(true); // Ensure our internal loading state is true
-    }
-    setError(null);
-    retryCountRef.current = 0;
-
-    if (!lastFm_Key) {
-      setError("Last.fm API key is missing. Please configure it.");
-      setLoading(false);
-      setIsInitialLoad(false);
-      clearData();
-      return;
-    }
-
-    const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-    const username = await SecureStore.getItemAsync('lastfm_username');
-
-    console.log('Attempting to load data. Username:', username, 'SessionKey present:', !!sessionKey);
-
-
-    if (!sessionKey || !username) {
-      setError('Please log in to Last.fm to see your data.');
-      clearData();
-      setLoading(false);
-      setIsInitialLoad(false); // Initial load attempt finished (auth failed)
-      if (intervalRef.current) clearInterval(intervalRef.current); // Stop interval if not logged in
-      return;
-    }
-
+  const updateCurrentlyPlaying = useCallback(async () => {
     try {
-      // Fetch User Info
-      const userResponse = await fetch(
-        `https://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${username}&api_key=${lastFm_Key}&sk=${sessionKey}&format=json`
-      );
-      if (!userResponse.ok) {
-        const errorData = await userResponse.json().catch(() => ({ message: 'Unknown API error' }));
-        throw new Error(`Failed to fetch user info: ${errorData.message || userResponse.status}`);
-      }
-      const userData = await userResponse.json();
-      setUserInfo(userData.user);
+      const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY;
+      const sessionKey = await SecureStore.getItemAsync("lastfm_session_key");
+      const username = await SecureStore.getItemAsync("lastfm_username");
+      if (!apiKey || !sessionKey || !username) return;
 
-      // Fetch other data in parallel
-      const [albumsData, recentTracksData, currentTrackData] = await Promise.all([
-        getTopAlbums(lastFm_Key, sessionKey, username),
-        getRecentTracks(lastFm_Key, sessionKey, username),
-        getCurrentlyPlayingTrack(lastFm_Key, sessionKey, username)
-      ]);
+      const recentTracksData = await getRecentTracks(apiKey, sessionKey, username);
 
-      setTopAlbums(albumsData || []);
-      setRecentTracks(recentTracksData || []);
-      setCurrentlyPlaying(currentTrackData);
+      const nowPlaying =
+        recentTracksData?.[0]?.["@attr"]?.nowplaying === "true"
+          ? recentTracksData[0]
+          : null;
+      setCurrentlyPlaying(nowPlaying);
 
-      // Clear previous interval and set new one
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      intervalRef.current = setInterval(() => {
-        fetchCurrentlyPlaying(lastFm_Key, sessionKey, username);
-      }, 15 * 1000);
-
-    } catch (err: any) {
-      console.error('Failed to fetch Last.fm data:', err);
-      setError(err.message || 'Failed to fetch data. Please try again.');
-      if (intervalRef.current) clearInterval(intervalRef.current); // Stop interval on error
-    } finally {
-      setLoading(false);
-      setIsInitialLoad(false); // Initial load sequence is complete
+      setRecentTracks(nowPlaying ? recentTracksData.slice(1) : recentTracksData);
+    } catch (err) {
+      console.error("Failed to update currently playing track:", err);
     }
-  }, [fetchCurrentlyPlaying, lastFm_Key]); // Add lastFm_Key to dependencies
+  }, []);
 
-  // Effect for initial data load
   useEffect(() => {
-    loadData();
+    loadInitialData();
+    const interval = setInterval(updateCurrentlyPlaying, 15000); // 15s
+    return () => clearInterval(interval);
+  }, [loadInitialData, updateCurrentlyPlaying]);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [loadData]); // `loadData` is memoized with useCallback
-
-  const handleRefresh = () => {
-    loadData(true); // Pass true to indicate manual refresh
+  const refresh = async () => {
+    await loadInitialData();
+    await updateCurrentlyPlaying();
   };
 
+  return {
+    userInfo,
+    currentlyPlaying,
+    topAlbums,
+    recentTracks,
+    weeklyReport,
+    loading,
+    error,
+    refresh,
+  };
+};
 
-  if (isInitialLoad && loading) {
+const Home = () => {
+  const {
+    userInfo,
+    currentlyPlaying,
+    topAlbums,
+    recentTracks,
+    weeklyReport,
+    loading,
+    error,
+    refresh,
+  } = useLastFmHomeData();
+
+  if (loading && !userInfo) {
     return (
-      <SafeAreaView style={styles.centeredMessageContainer} className="bg-primary">
-        <ActivityIndicator size="large" color="#1DB954" />
-        <Text style={styles.messageText} className="color-green mt-4">Loading your Last.fm data...</Text>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#D92323" />
+      </View>
     );
   }
 
-  // If error and no user info (e.g., login required or major fetch failure)
-  if (error && !userInfo) {
+  if (error) {
     return (
-      <SafeAreaView style={styles.centeredMessageContainer} className="bg-primary">
-        <Ionicons name="alert-circle-outline" size={48} color="#D92323" />
-        <Text style={styles.errorText} className="color-red-500 mt-2">{error}</Text>
-        {/* Optionally, add a "Try Again" or "Login" button here */}
-        <TouchableOpacity onPress={handleRefresh} style={[styles.refreshButton, styles.tryAgainButton]}>
-            <Text style={styles.refreshButtonText}>Try Again</Text>
+      <View style={styles.centerContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color="#A0A0A0" />
+        <Text style={styles.errorText}>Request Failed</Text>
+        <TouchableOpacity onPress={refresh} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="bg-primary flex-1">
+    <View style={styles.container}>
+      <StatusBar style="light" backgroundColor="#121212" />
+
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={loading && !isInitialLoad}
-            onRefresh={handleRefresh}
-            tintColor="#1DB954" // iOS
-            colors={['#1DB954']} // Android
+            refreshing={loading}
+            onRefresh={refresh}
+            tintColor="#D92323"
+            colors={["#D92323"]}
           />
         }
       >
-        {/* Display error as a banner if data is already present but a refresh failed */}
-        {error && userInfo && (
-            <View style={styles.bannerError}>
-                <Text style={styles.bannerErrorText}>{error}</Text>
-            </View>
-        )}
+        <Text style={styles.welcomeText}>Welcome, {userInfo?.name}</Text>
 
-        {userInfo ? (
-          <View className="items-center px-4 pt-4">
-            <Text className="text-2xl font-abold color-green mb-2 text-center">
-              Welcome, {userInfo.name}!
-            </Text>
-            {currentlyPlaying ? (
-              <View className="w-full my-4">
-                {/*<Text className="text-lg font-asemi color-green mb-2 text-center">Now Playing:</Text>*/}
-                <SongCard track={currentlyPlaying} />
-              </View>
-            ) : (
-              <Text className="text-lg font-aregular color-gray-400 my-4 text-center">No track is currently playing</Text>
-            )}
-          </View>
-        ) : (
-          !loading && <Text style={styles.messageText} className="color-green text-center mt-10">No user information available.</Text>
-        )}
+        <Section title="Your Weekly Report">
+          <WeeklyReportCard report={weeklyReport} />
+        </Section>
 
-        {userInfo && (
-          <>
-            <View className="mt-6 px-4">
-              <Text className="text-xl font-abold color-green mb-3">Your Top Albums</Text>
-              {topAlbums.length > 0 ? (
-                <FlatList
-                  horizontal
-                  data={topAlbums}
-                  renderItem={({ item }) => <AlbumCard album={item} />}
-                  keyExtractor={(item, index) => `${item.name}-${item.artist.name}-${index}`}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 2 }}
-                />
-              ) : (
-                !loading && <Text className="text-md font-aregular color-gray-400">No top albums found.</Text>
-              )}
-            </View>
+        <Section title="Now Playing">
+          {currentlyPlaying ? (
+            <SongCard track={currentlyPlaying} />
+          ) : (
+            <Text style={styles.placeholderText}>Not currently scrobbling.</Text>
+          )}
+        </Section>
 
-            <View className="mt-8 px-4">
-              <Text className="text-xl font-abold color-green mb-3">Your Recent Tracks</Text>
-              {recentTracks.length > 0 ? (
-                recentTracks.map((track, index) => (
-                  <SongCard key={`${track.name}-${track.artist['#text']}-${index}`} track={track} />
-                ))
-              ) : (
-                !loading && <Text className="text-md font-aregular color-gray-400">No recent tracks found.</Text>
-              )}
-            </View>
-          </>
-        )}
+        <Section title="Top Monthly Albums">
+          {topAlbums.length > 0 ? (
+            <FlatList
+              horizontal
+              data={topAlbums}
+              renderItem={({ item }) => <AlbumCard album={item} />}
+              keyExtractor={(item) => item.name + item.artist.name}
+              showsHorizontalScrollIndicator={false}
+            />
+          ) : (
+            <Text style={styles.placeholderText}>Not enough data.</Text>
+          )}
+        </Section>
+
+        <Section title="Recent Tracks">
+          {recentTracks.length > 0 ? (
+            recentTracks.map((track: LastFmTrack, index: number) => (
+              <SongCard key={`${track.name}-${index}`} track={track} />
+            ))
+          ) : (
+            <Text style={styles.placeholderText}>No recent tracks found.</Text>
+          )}
+        </Section>
       </ScrollView>
-      <TouchableOpacity onPress={handleRefresh} disabled={loading && !isInitialLoad} style={styles.refreshButton}>
-        <Ionicons name="refresh" size={24} color={loading && !isInitialLoad ? "#aaa" : "#fff"} />
+
+      <TouchableOpacity
+        onPress={refresh}
+        disabled={loading}
+        style={styles.refreshButton}
+      >
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" />
+        ) : (
+          <Ionicons name="refresh" size={24} color={"#fff"} />
+        )}
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 };
 
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <View style={styles.sectionContainer}>
+    <Text style={styles.sectionTitle}>{title}</Text>
+    {children}
+  </View>
+);
+
 const styles = StyleSheet.create({
-  centeredMessageContainer: {
+  container: { flex: 1, backgroundColor: "#121212" },
+  centerContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#121212",
   },
-  messageText: {
-    fontSize: 18,
-    textAlign: 'center',
+  scrollContent: { paddingVertical: 20, paddingBottom: 80 },
+  welcomeText: {
+    fontSize: 28,
+    fontFamily: "AvenirNextLTPro-Bold",
+    color: "#FFFFFF",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionContainer: { marginBottom: 30 },
+  sectionTitle: {
+    fontSize: 22,
+    fontFamily: "AvenirNextLTPro-Bold",
+    color: "#D92323",
+    marginBottom: 15,
+    paddingHorizontal: 20,
+  },
+  placeholderText: {
+    fontSize: 16,
+    fontFamily: "AvenirNextLTPro-Regular",
+    color: "#A0A0A0",
+    paddingHorizontal: 20,
   },
   errorText: {
     fontSize: 16,
-    textAlign: 'center',
-    marginTop: 8,
+    fontFamily: "AvenirNextLTPro-Regular",
+    color: "#A0A0A0",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  retryButton: {
+    backgroundColor: "#282828",
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 20,
+    marginTop: 20,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "AvenirNextLTPro-Bold",
   },
   refreshButton: {
-    position: 'absolute',
-    bottom: 20,
+    position: "absolute",
+    bottom: 30,
     right: 20,
-    backgroundColor: '#D92323',
-    borderRadius: 30,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  refreshButtonText: {
-      color: '#fff',
-      fontFamily: 'AvenirNextLTPro-Bold',
-      fontSize: 16,
-  },
-  tryAgainButton: {
-    position: 'relative',
-    bottom: 'auto',
-    right: 'auto',
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  bannerError: {
-    backgroundColor: '#D92323',
-    padding: 10,
-    margin: 16,
-    borderRadius: 5,
-  },
-  bannerErrorText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontFamily: 'AvenirNextLTPro-Regular',
+    backgroundColor: "#D92323",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
   },
 });
 
