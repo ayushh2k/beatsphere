@@ -60,6 +60,7 @@ const MapViewComponent = () => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["40%", "80%"], []);
   const latestLocationRef = useRef<Location.LocationObject | null>(null);
+  const sseReconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
   useEffect(() => {
@@ -135,27 +136,43 @@ const MapViewComponent = () => {
 }, []);
 
   const initializeSSE = useCallback(async () => {
-    if (eventSourceRef.current) eventSourceRef.current.close();
-    const username = await SecureStore.getItemAsync("lastfm_username");
-    if (!username) return;
-    const source = new EventSource(`${BACKEND_URL}/api/locations/stream`);
-    source.addEventListener("message", (event) => {
-      if (event.data) {
-        try {
-          const locations: UserLocation[] = JSON.parse(event.data);
-          const validLocations = locations.filter(
-            (loc) =>
-              loc &&
-              typeof loc.latitude === "number" &&
-              typeof loc.longitude === "number"
-          );
-          setOtherUsers(validLocations.filter((loc) => loc.id !== username));
-        } catch (e) {
-          console.error("SSE parse error:", e);
-        }
+    const connectSSE = async () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
-    });
-    eventSourceRef.current = source;
+      
+      const username = await SecureStore.getItemAsync("lastfm_username");
+      if (!username) return;
+
+      const source = new EventSource(`${BACKEND_URL}/api/locations/stream`);
+      eventSourceRef.current = source;
+
+      source.addEventListener('open', () => {
+        if (sseReconnectTimeoutRef.current) {
+          clearTimeout(sseReconnectTimeoutRef.current);
+        }
+      });
+
+      source.addEventListener("message", (event) => {
+        if (event.data) {
+          try {
+            const locations: UserLocation[] = JSON.parse(event.data);
+            const validLocations = locations.filter(loc => loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
+            setOtherUsers(validLocations.filter((loc) => loc.id !== username));
+          } catch (e) {
+            console.error("SSE parse error:", e);
+          }
+        }
+      });
+
+      source.addEventListener('error', (err) => {
+        source.close();
+        sseReconnectTimeoutRef.current = setTimeout(connectSSE, 5000);
+      });
+    };
+
+    connectSSE();
+
   }, []);
 
   useEffect(() => {
@@ -189,8 +206,9 @@ const MapViewComponent = () => {
     const listeningInterval = setInterval(checkListeningStatus, 20000);
 
     return () => {
-      eventSourceRef.current?.close();
-      clearInterval(listeningInterval);
+      if (eventSourceRef.current) eventSourceRef.current.close();
+      if (listeningInterval) clearInterval(listeningInterval);
+      if (sseReconnectTimeoutRef.current) clearTimeout(sseReconnectTimeoutRef.current);
     };
   }, [initializeSSE, checkListeningStatus]);
 

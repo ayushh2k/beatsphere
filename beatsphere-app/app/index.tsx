@@ -82,6 +82,14 @@ export default function Index() {
     return <View style={styles.container} />;
   }
 
+  useEffect(() => {
+    const backendUrl = 'https://beatsphere-backend.onrender.com';
+    if (backendUrl) {
+      console.log('Pinging server to wake it up...');
+      fetch(`${backendUrl}/health`).catch(() => {});
+    }
+  }, []);
+
   return (
     // <GestureHandlerRootView style={{ flex: 1 }}>
     <View style={styles.container}>
