@@ -1,3 +1,5 @@
+// components/GlobalChatroom.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -16,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { filterCurseWords } from '../utils/curseWordFilter';
 import ChatProfileCallout from './ChatProfileCallout';
+import GifPicker from './GifPicker';
+import GifMessage from './GifMessage';
 
 // --- Type Definitions ---
 interface Message {
@@ -74,6 +78,7 @@ const GlobalChatroom = () => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [typingIndicator, setTypingIndicator] = useState<TypingIndicator>({ isTyping: false, message: '' });
   const [selectedUser, setSelectedUser] = useState<Message | null>(null);
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   // --- Refs for managing instances and state ---
   const ws = useRef<WebSocket | null>(null);
@@ -203,6 +208,11 @@ const GlobalChatroom = () => {
     setInputText('');
   };
 
+  const handleSelectGif = (gifUrl: string) => {
+    sendMessage(gifUrl);
+    setIsPickerVisible(false);
+  };
+
   const sendMessage = (text: string) => {
     if (!userInfoRef.current) return;
     if (ws.current?.readyState === WebSocket.OPEN) {
@@ -237,41 +247,62 @@ const GlobalChatroom = () => {
   // --- UI Rendering ---
   const renderMessage = ({ item }: { item: Message }) => {
     if (item.isSystemMessage) {
+      return <View style={styles.systemMessageContainer}><Text style={styles.systemMessageText}>{item.text}</Text></View>;
+    }
+    const isOwnMessage = item.senderId === userInfoRef.current?.id;
+    const isGif = item.text.startsWith('https://') && item.text.endsWith('.gif');
+
+    // --- RENDER LOGIC FOR YOUR OWN MESSAGES ---
+    if (isOwnMessage) {
       return (
-        <View style={styles.systemMessageContainer}>
-          <Text style={styles.systemMessageText}>{item.text}</Text>
+        <View style={[styles.messageBubble, styles.ownMessage, isGif && styles.gifBubble]}>
+          {isGif ? (
+            <View>
+              {/* <Image source={{ uri: item.text }} style={styles.gifImage} contentFit="cover" /> */}
+              <GifMessage uri={item.text} />
+              <Text style={styles.gifTimestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.messageText}>{item.text}</Text>
+              <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+            </>
+          )}
         </View>
       );
     }
-    const isOwnMessage = item.senderId === userInfoRef.current?.id;
-    if (isOwnMessage) {
-      // Render own messages without an avatar
+    
+    // --- RENDER LOGIC FOR OTHER USERS' MESSAGES ---
+    if (isGif) {
       return (
-        <View style={[styles.messageBubble, styles.ownMessage]}>
-          <Text style={styles.messageText}>{item.text}</Text>
-          <Text style={styles.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-          </Text>
+        <View style={styles.otherMessageContainer}>
+          <TouchableOpacity onPress={() => setSelectedUser(item)}>
+            {item.senderImage ? <Image source={{ uri: item.senderImage }} style={styles.avatar} contentFit="cover" /> : <DefaultAvatar username={item.senderName} />}
+          </TouchableOpacity>
+          <View style={[styles.messageBubble, styles.otherMessage, styles.gifBubble]}>
+            <View>
+              {/* <Image source={{ uri: item.text }} style={styles.gifImage} contentFit="cover" /> */}
+              <GifMessage uri={item.text} />
+              <Text style={styles.gifTimestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+            </View>
+          </View>
         </View>
       );
     }
 
-    // Render other users messages with an avatar
     return (
       <View style={styles.otherMessageContainer}>
         <TouchableOpacity onPress={() => setSelectedUser(item)}>
-          {item.senderImage ? (
-            <Image source={{ uri: item.senderImage }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <DefaultAvatar username={item.senderName} />
-          )}
+          {item.senderImage ? <Image source={{ uri: item.senderImage }} style={styles.avatar} contentFit="cover" /> : <DefaultAvatar username={item.senderName} />}
         </TouchableOpacity>
-        <View style={[styles.messageBubble, styles.otherMessage]}>
-          <Text style={styles.senderName}>{item.senderName}</Text>
-          <Text style={styles.messageText}>{item.text}</Text>
-          <Text style={styles.timestamp}>
+        <View style={styles.messageContentContainer}>
+          <View style={[styles.messageBubble, styles.otherMessage]}>
+            <Text style={styles.senderName}>{item.senderName}</Text>
+            <Text style={styles.messageText}>{item.text}</Text>
+          <Text style={styles.otherTimestamp}>
             {new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
           </Text>
+          </View>
         </View>
       </View>
     );
@@ -321,6 +352,9 @@ const GlobalChatroom = () => {
             multiline
             editable={connectionStatus === 'connected'}
           />
+          <TouchableOpacity onPress={() => setIsPickerVisible(true)} style={styles.gifButton}>
+            <Ionicons name="link-outline" size={24} color="#A0A0A0" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleSendPress}
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
@@ -333,6 +367,11 @@ const GlobalChatroom = () => {
         user={selectedUser}
         isVisible={!!selectedUser}
         onClose={() => setSelectedUser(null)}
+      />
+      <GifPicker 
+        isVisible={isPickerVisible} 
+        onSelectGif={handleSelectGif} 
+        onClose={() => setIsPickerVisible(false)} 
       />
     </View>
   );
@@ -391,7 +430,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: '#282828',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: '#181818',
   },
   input: {
@@ -406,14 +445,6 @@ const styles = StyleSheet.create({
     color: 'white',
     marginRight: 8,
     fontSize: 15,
-  },
-  sendButton: {
-    backgroundColor: '#D92323',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   sendButtonDisabled: { opacity: 0.4 },
   typingIndicatorContainer: {
@@ -440,6 +471,52 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginVertical: 4,
     maxWidth: '85%',
+  },
+   gifButton: {
+    backgroundColor: '#2C2C2C',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+
+  sendButton: {
+    backgroundColor: '#D92323',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+
+  gifBubble: {
+    padding: 3,
+    backgroundColor: 'transparent',
+  },
+  messageContentContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  otherTimestamp: {
+    color: '#6e6e6e',
+    fontSize: 10,
+    marginTop: 4,
+    marginLeft: 0,
+  },
+  gifTimestamp: {
+    position: 'absolute',
+    bottom: 5,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    color: 'white',
+    fontSize: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
 });
 

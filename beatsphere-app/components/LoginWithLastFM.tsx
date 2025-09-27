@@ -10,6 +10,7 @@ export default function LoginWithLastFM() {
 
     const handleLogin = () => {
         const redirectUri = 'beatsphere://';
+        // const redirectUri = 'exp://192.168.1.6:8081';
         const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(redirectUri)}`;
         Linking.openURL(authUrl);
     };
