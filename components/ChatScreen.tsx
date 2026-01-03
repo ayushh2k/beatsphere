@@ -62,7 +62,8 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
       this.setState({ userId: currentUserId || '' });
 
       if (!this.ws) {
-        this.ws = new WebSocket(`wss://beatsphere-backend.onrender.com/chat`);
+        this.ws = new WebSocket(`wss://api.beatsphere.live/chat`);
+        // this.ws = new WebSocket(`wss://beatsphere-backend.onrender.com/chat`);
         // this.ws = new WebSocket(`ws://192.168.1.6:3000/chat`);
 
         this.ws.onopen = () => {
@@ -156,7 +157,7 @@ class ChatScreen extends React.Component<ChatScreenProps, ChatScreenState> {
 
         <FlatList
           className='p-4'
-          ref={(ref) => this.flatListRef = ref}
+          ref={(ref) => { this.flatListRef = ref }}
           data={this.state.messages}
           renderItem={this.renderMessage}
           keyExtractor={(item) => item.id}

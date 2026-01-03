@@ -1,10 +1,18 @@
 // app/(tabs)/chat.tsx
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { StatusBar, View, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import GlobalChatroom from '../../components/GlobalChatroom';
+import analytics from '../../utils/analytics';
 
 const ChatScreen = () => {
+  useFocusEffect(
+    useCallback(() => {
+      analytics.trackScreenView('chat');
+    }, [])
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#121212"/>

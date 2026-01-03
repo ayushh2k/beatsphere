@@ -7,6 +7,7 @@ import { router, useFocusEffect } from 'expo-router';
 
 import MapViewComponent from '@/components/Map';
 import LocationConsentModal from '@/components/LocationConsentModal';
+import analytics from '../../utils/analytics';
 
 const LOCATION_CONSENT_KEY = 'has_accepted_location_terms';
 
@@ -15,6 +16,7 @@ const MapScreen = () => {
 
   useFocusEffect(
     React.useCallback(() => {
+      analytics.trackScreenView('map');
       const checkConsent = async () => {
         const hasConsented = await AsyncStorage.getItem(LOCATION_CONSENT_KEY);
         setConsentStatus(hasConsented === 'true');

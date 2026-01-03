@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import LoginWithLastFM from "@/components/LoginWithLastFM";
 import { getMobileSession, getUserInfo } from "../utils/lastFmHelpers";
+import analytics from "../utils/analytics";
 
 const useLastFmAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null means "checking"
@@ -44,6 +45,10 @@ const useLastFmAuth = () => {
 
           await SecureStore.setItemAsync("lastfm_username", userInfo.name);
           await SecureStore.setItemAsync("lastfm_session_key", sessionKey);
+
+          // Link user to analytics session and track login
+          await analytics.linkUser(userInfo.name);
+          await analytics.trackLogin(userInfo.name);
 
           setIsLoggedIn(true);
         } catch (error) {

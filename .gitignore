@@ -21,5 +21,6 @@ expo-env.d.ts
 
 lib/appwrite.ts
 android
+ios
 .env
 utils/spotifyAuth.ts

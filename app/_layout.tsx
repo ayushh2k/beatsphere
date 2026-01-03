@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Buffer } from "buffer";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import analytics from "../utils/analytics";
 
 global.Buffer = Buffer;
 
@@ -28,7 +29,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (error) throw error;
-    if (fontsLoaded) SplashScreen.hideAsync();
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+      // Initialize analytics
+      analytics.initialize().then(() => {
+        analytics.track('app_opened');
+      });
+    }
   }, [fontsLoaded, error]);
 
   if (!fontsLoaded && !error) {

@@ -4,7 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 
 // const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://192.168.1.6:3000";
 // const BACKEND_URL = "https://backend-beatsphere.onrender.com";
-const BACKEND_URL = "https://beatsphere-backend.onrender.com";
+// const BACKEND_URL = "https://beatsphere-backend.onrender.com";
+const BACKEND_URL = "https://api.beatsphere.live";
 
 const api = axios.create({
   baseURL: BACKEND_URL,

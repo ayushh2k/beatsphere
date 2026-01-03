@@ -7,7 +7,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity, Platform, Linking, Animated, Image } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from "react-native-maps";
 import MapCluster from "react-native-map-clustering";
 import BottomSheet, {
@@ -17,19 +17,18 @@ import BottomSheet, {
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
-import EventSource from "react-native-event-source";
+// import EventSource from "react-native-event-source";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from 'expo-image';
+// import { Image } from 'expo-image';
 
-import { getListeningStatus  } from "../utils/lastFmHelpers";
+import { getListeningStatus, getRecentTracks } from "../utils/lastFmHelpers";
 import mapStyle from "../utils/mapStyle.json";
 import api from '../utils/api';
+import analytics from '../utils/analytics';
 import CustomMarker from "./CustomMarker";
 import UserCard from "./UserCard";
 
-const BACKEND_URL = 'https://beatsphere-backend.onrender.com';
-// const BACKEND_URL = "https://backend-beatsphere.onrender.com";
-// const BACKEND_URL = "http://192.168.1.6:3000";
+const BACKEND_URL = 'https://api.beatsphere.live';
 
 // --- Type Definitions ---
 interface UserLocation {
@@ -41,7 +40,7 @@ interface UserLocation {
   currentlyPlaying?: any;
   username?: string;
   city?: string | null;
-  listeningStatus?: 'live' | 'recent'; 
+  listeningStatus?: 'live' | 'recent';
 }
 
 const MapViewComponent = () => {
@@ -50,8 +49,11 @@ const MapViewComponent = () => {
   const [otherUsers, setOtherUsers] = useState<UserLocation[]>([]);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [visibleUsers, setVisibleUsers] = useState<UserLocation[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserLocation | null>(null);
   const [bottomSheetTitle, setBottomSheetTitle] = useState("Listeners Nearby");
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const [sheetMode, setSheetMode] = useState<'list' | 'detail'>('list');
+  const [selectedUserHistory, setSelectedUserHistory] = useState<any[]>([]);
 
   // --- Refs ---
   const mapRef = useRef<MapView>(null);
@@ -79,9 +81,23 @@ const MapViewComponent = () => {
     });
 
     if (imageUrls.length > 0) {
-      Image.prefetch(imageUrls);
+      imageUrls.forEach(url => Image.prefetch(url));
     }
   }, [otherUsers]);
+
+  useEffect(() => {
+    if (selectedUser && sheetMode === 'detail') {
+      const fetchHistory = async () => {
+        try {
+          const tracks = await getRecentTracks(process.env.EXPO_PUBLIC_LASTFM_KEY!, "", selectedUser.username || selectedUser.id);
+          setSelectedUserHistory(tracks?.slice(0, 5) || []);
+        } catch (e) {
+          console.error("Error fetching history", e);
+        }
+      };
+      fetchHistory();
+    }
+  }, [selectedUser, sheetMode]);
 
   // --- Core Logic ---
   const checkListeningStatus = useCallback(async () => {
@@ -100,82 +116,126 @@ const MapViewComponent = () => {
     );
 
     if (listeningStatusResult) {
-    isListeningRef.current = true;
-    const userImage = await SecureStore.getItemAsync("lastfm_user_image");
+      isListeningRef.current = true;
+      const userImage = await SecureStore.getItemAsync("lastfm_user_image");
 
-    const locationData: UserLocation = {
-      id: username,
-      name: username,
-      latitude,
-      longitude,
-      imageUrl: userImage,
-      currentlyPlaying: listeningStatusResult.track,
-      listeningStatus: listeningStatusResult.status as 'live' | 'recent',
-      username,
-    };
+      const locationData: UserLocation = {
+        id: username,
+        name: username,
+        latitude,
+        longitude,
+        imageUrl: userImage,
+        currentlyPlaying: listeningStatusResult.track,
+        listeningStatus: listeningStatusResult.status as 'live' | 'recent',
+        username,
+      };
 
-    // setUserLocation(locationData);
-    // api.post('/api/location', locationData)
-    //     .catch((e) => console.error("Error posting location:", e.response?.data || e.message));
-    api.post('/api/location', locationData)
+      // Update location on backend
+      api.patch(`/users/${username}/location`, {
+        lat: latitude,
+        lon: longitude,
+        status: listeningStatusResult.status,
+        imageUrl: userImage,
+        currentlyPlaying: listeningStatusResult.track,
+      })
         .then(response => {
           const generalizedLocation = response.data;
-          generalizedLocation.username = generalizedLocation.name; 
+          generalizedLocation.username = generalizedLocation.name;
           setUserLocation(response.data);
         })
-        .catch((e) => console.error("Error posting location:", e.response?.data || e.message));
+        .catch((e) => console.error("Error updating location:", e.response?.data || e.message));
 
-  } else {
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      setUserLocation(null);
-      api.delete(`/api/location/${username}`)
-          .catch((e) => console.error("Error deleting location:", e.response?.data || e.message));
+    } else {
+      if (isListeningRef.current) {
+        isListeningRef.current = false;
+        setUserLocation(null);
+        // Backend handles cleanup now
+      }
     }
-  }
-}, []);
+  }, []);
 
   const initializeSSE = useCallback(async () => {
-    const connectSSE = async () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      
-      const username = await SecureStore.getItemAsync("lastfm_username");
-      if (!username) return;
+    const username = await SecureStore.getItemAsync("lastfm_username");
+    if (!username) {
+      console.log('Location stream: No username found, cannot start');
+      return;
+    }
 
-      const source = new EventSource(`${BACKEND_URL}/api/locations/stream`);
-      eventSourceRef.current = source;
+    // console.log('Location stream: Starting XHR stream from', `${BACKEND_URL}/users/stream`);
 
-      source.addEventListener('open', () => {
-        if (sseReconnectTimeoutRef.current) {
-          clearTimeout(sseReconnectTimeoutRef.current);
-        }
-      });
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${BACKEND_URL}/users/stream`);
+    xhr.setRequestHeader('Accept', 'text/event-stream');
 
-      source.addEventListener("message", (event) => {
-        if (event.data) {
-          try {
-            const locations: UserLocation[] = JSON.parse(event.data);
-            const validLocations = locations.filter(loc => loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
-            setOtherUsers(validLocations.filter((loc) => loc.id !== username));
-          } catch (e) {
-            console.error("SSE parse error:", e);
+    let processedLength = 0;
+    let buffer = "";
+
+    xhr.onreadystatechange = () => {
+      // readyState 3 (LOADING) means we have partial data, 4 (DONE) means stream closed/error
+      if (xhr.readyState === 3 || xhr.readyState === 4) {
+        const response = xhr.responseText || "";
+        const chunk = response.substring(processedLength);
+        processedLength = response.length;
+
+        if (chunk.length > 0) {
+          buffer += chunk;
+          
+          // Split by double newline to get full events
+          const parts = buffer.split("\n\n");
+          
+          // The last part might be incomplete, so we keep it in the buffer
+          // and process the rest
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const lines = part.split("\n");
+            for (const line of lines) {
+              if (line.startsWith("data:")) {
+                const jsonStr = line.substring(5).trim();
+                if (jsonStr) {
+                  try {
+                    const locations: UserLocation[] = JSON.parse(jsonStr);
+                    
+                    const validLocations = locations
+                      .filter(loc => loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number')
+                      .map(loc => ({
+                        ...loc,
+                        username: loc.username || loc.name || loc.id,
+                      }));
+
+                    const filtered = validLocations.filter((loc) => loc.id !== username);
+                    setOtherUsers(filtered);
+                  } catch (e) {
+                    // console.error("Location stream: Parse error", e);
+                  }
+                }
+              }
+            }
           }
         }
-      });
-
-      source.addEventListener('error', (err) => {
-        source.close();
-        sseReconnectTimeoutRef.current = setTimeout(connectSSE, 5000);
-      });
+      }
+      
+      if (xhr.readyState === 4) {
+        // console.log("Location stream: Connection closed (readyState 4)");
+        // Optional: Implement reconnect logic here if needed
+      }
     };
 
-    connectSSE();
+    xhr.onerror = (e) => {
+      // console.error("Location stream: XHR Error", e);
+    };
 
+    xhr.send();
+
+    return () => {
+      // console.log('Location stream: Aborting XHR');
+      xhr.abort();
+    };
   }, []);
 
   useEffect(() => {
+    let cleanupPolling: (() => void) | undefined;
+
     const initialize = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -197,7 +257,7 @@ const MapViewComponent = () => {
         }
       );
 
-      initializeSSE();
+      cleanupPolling = await initializeSSE();
       checkListeningStatus();
     };
 
@@ -206,18 +266,22 @@ const MapViewComponent = () => {
     const listeningInterval = setInterval(checkListeningStatus, 20000);
 
     return () => {
-      if (eventSourceRef.current) eventSourceRef.current.close();
+      if (cleanupPolling) cleanupPolling();
       if (listeningInterval) clearInterval(listeningInterval);
-      if (sseReconnectTimeoutRef.current) clearTimeout(sseReconnectTimeoutRef.current);
     };
   }, [initializeSSE, checkListeningStatus]);
+
+  // --- Debug otherUsers ---
+  // useEffect(() => {
+  //   console.log('Other users on map:', otherUsers.length, otherUsers.map(u => u.id));
+  // }, [otherUsers]);
 
   // --- Marker Refreshing & Jittering Fix ---
   useEffect(() => {
     setTracksViewChanges(true);
-    const timer = setTimeout(() => setTracksViewChanges(false), 1000);
+    const timer = setTimeout(() => setTracksViewChanges(false), 500);
     return () => clearTimeout(timer);
-  }, [otherUsers, userLocation]);
+  }, [otherUsers]);
 
   const jitteredUsers = useMemo(() => {
     const usersByCoord: { [key: string]: UserLocation[] } = {};
@@ -244,7 +308,7 @@ const MapViewComponent = () => {
   }, [otherUsers]);
 
   // --- UI Handlers ---
-  const handleRegionChange = (region: Region) => {
+  const handleRegionChange = useCallback((region: Region) => {
     const visible = otherUsers.filter(
       (user) =>
         user.latitude > region.latitude - region.latitudeDelta / 2 &&
@@ -253,14 +317,15 @@ const MapViewComponent = () => {
         user.longitude < region.longitude + region.longitudeDelta / 2
     );
     setVisibleUsers(visible);
-  };
+  }, [otherUsers]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     checkListeningStatus();
-  };
+  }, [checkListeningStatus]);
 
-  const handleLocateMe = () => {
+  const handleLocateMe = useCallback(() => {
     if (userLocation && mapRef.current) {
+      analytics.trackMapInteraction('locate_me');
       mapRef.current.animateToRegion(
         {
           latitude: userLocation.latitude,
@@ -271,14 +336,17 @@ const MapViewComponent = () => {
         1000
       );
     }
-  };
+  }, [userLocation]);
 
-  const openUserList = () => {
+  const openUserList = useCallback(() => {
+    analytics.trackMapInteraction('open_user_list', { user_count: visibleUsers.length });
+    setSheetMode('list');
     setBottomSheetTitle(`Listeners Nearby (${visibleUsers.length})`);
     bottomSheetRef.current?.expand();
-  };
+  }, [visibleUsers]);
 
-  const flyToUser = (user: UserLocation) => {
+  const flyToUser = useCallback((user: UserLocation) => {
+    analytics.trackMapInteraction('fly_to_user', { target_user: user.username });
     bottomSheetRef.current?.close();
     mapRef.current?.animateToRegion(
       {
@@ -289,7 +357,92 @@ const MapViewComponent = () => {
       },
       1000
     );
-  };
+  }, []);
+
+  const lastPressTime = useRef(0);
+  const onMarkerPress = useCallback((user: UserLocation) => {
+    const now = Date.now();
+    if (now - lastPressTime.current > 500) {
+      lastPressTime.current = now;
+      setSelectedUser(user);
+      setSheetMode('detail');
+      // setBottomSheetTitle(`${user.username || user.name}'s History`);
+      // bottomSheetRef.current?.expand();
+      // Expand to index 0 (40%) or 1 (80%)?
+      bottomSheetRef.current?.expand();
+    }
+  }, []);
+
+  const handleMapPress = useCallback(() => {
+    setSelectedUser(null);
+    bottomSheetRef.current?.close();
+  }, []);
+
+  const mapComponent = useMemo(() => (
+    <MapView
+      ref={mapRef}
+      style={styles.map}
+      // mapRef={(ref) => {
+      //   mapRef.current = ref as unknown as MapView;
+      // }}
+      provider={PROVIDER_GOOGLE}
+      customMapStyle={mapStyle}
+      showsCompass={false}
+      toolbarEnabled={false}
+      initialRegion={{
+        latitude: 50,
+        longitude: 10,
+        latitudeDelta: 90,
+        longitudeDelta: 90,
+      }}
+      onRegionChangeComplete={handleRegionChange}
+      onPress={handleMapPress}
+    >
+      {jitteredUsers.map((user) => (
+        <Marker
+          key={user.id}
+          coordinate={{
+            latitude: user.latitude,
+            longitude: user.longitude,
+          }}
+          tracksViewChanges={tracksViewChanges}
+          onPress={(e) => {
+            e.stopPropagation();
+            onMarkerPress(user);
+          }}
+        >
+          <CustomMarker
+            {...user}
+            listeningStatus={user.listeningStatus}
+            id={user.id}
+            username={user.name}
+          />
+        </Marker>
+      ))}
+      {userLocation && (
+        <Marker
+          key="user-location"
+          coordinate={{
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+          }}
+          tracksViewChanges={tracksViewChanges}
+          zIndex={9999}
+          onPress={(e) => {
+            e.stopPropagation();
+            onMarkerPress(userLocation);
+          }}
+        >
+          <CustomMarker
+            {...userLocation}
+            listeningStatus={userLocation.listeningStatus}
+            username={userLocation.username}
+            id={userLocation.id}
+          />
+        </Marker>
+      )}
+    </MapView>
+  ), [jitteredUsers, userLocation, tracksViewChanges, handleRegionChange, handleMapPress, onMarkerPress]);
 
   if (permissionDenied) {
     return (
@@ -301,53 +454,7 @@ const MapViewComponent = () => {
 
   return (
     <View style={styles.container}>
-      <MapCluster
-        ref={mapRef}
-        style={styles.map}
-        // mapRef={(ref) => {
-        //   mapRef.current = ref as unknown as MapView;
-        // }}
-        provider={PROVIDER_GOOGLE}
-        clusterColor="#D92323"
-        customMapStyle={mapStyle}
-        showsCompass={false}
-        toolbarEnabled={false}
-        initialRegion={{
-          latitude: 40.7128,
-          longitude: 2.006,
-          latitudeDelta: 25,
-          longitudeDelta: 25,
-        }}
-        onRegionChangeComplete={handleRegionChange}
-      >
-        {userLocation && (
-          <CustomMarker
-            coordinate={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-            }}
-            tracksViewChanges={tracksViewChanges}
-            {...userLocation}
-            listeningStatus={userLocation.listeningStatus}
-            username={userLocation.username}
-            id={userLocation.id}
-          />
-        )}
-        {jitteredUsers.map((user) => (
-          <CustomMarker
-            coordinate={{
-              latitude: user.latitude,
-              longitude: user.longitude,
-            }}
-            key={user.id}
-            tracksViewChanges={tracksViewChanges}
-            {...user}
-            listeningStatus={user.listeningStatus}
-            id={user.id}
-            username={user.name}
-          />
-        ))}
-      </MapCluster>
+      {mapComponent}
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -396,22 +503,69 @@ const MapViewComponent = () => {
         )}
         backgroundStyle={styles.bottomSheet}
         handleIndicatorStyle={{ backgroundColor: "#4A4A4A" }}
+        enableContentPanningGesture={true}
       >
         <View style={styles.bottomSheetHeader}>
-          <Text style={styles.bottomSheetTitle}>Listeners Nearby</Text>
+          <Text style={styles.bottomSheetTitle}>
+            {sheetMode === 'list' ? bottomSheetTitle : `${selectedUser?.username || selectedUser?.name || 'User'}'s Recently Played`}
+          </Text>
         </View>
         <BottomSheetFlatList
-          data={visibleUsers}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <UserCard user={item} onFlyTo={() => flyToUser(item)} />
-          )}
+          data={sheetMode === 'list' ? visibleUsers : selectedUserHistory}
+          keyExtractor={(item: any, index: number) => sheetMode === 'list' ? item.id : (item.date?.uts || index.toString())}
+          renderItem={({ item }: { item: any }) => {
+            if (sheetMode === 'list') {
+              return <UserCard user={item} onFlyTo={() => flyToUser(item)} />;
+            } else {
+              // History Item Render
+              const trackName = item.name;
+              const artistName = item.artist['#text'];
+              const imageUrl = item.image?.find((img: any) => img.size === 'medium')?.['#text'];
+              
+              return (
+                <View style={styles.historyItem}>
+                   {imageUrl ? (
+                    <Image source={{ uri: imageUrl }} style={styles.historyImage} />
+                  ) : (
+                    <View style={[styles.historyImage, styles.historyPlaceholder]}>
+                      <Ionicons name="musical-notes" size={20} color="#666" />
+                    </View>
+                  )}
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTrack} numberOfLines={1}>{trackName}</Text>
+                    <Text style={styles.historyArtist} numberOfLines={1}>{artistName}</Text>
+                  </View>
+                </View>
+              );
+            } 
+          }}
+          ListFooterComponent={() => {
+            if (sheetMode === 'detail' && selectedUser) {
+              return (
+                <TouchableOpacity
+                  style={styles.lastFmButton}
+                  onPress={() => {
+                     const lastfmProfileUrl = `https://www.last.fm/user/${selectedUser.id}`;
+                     Linking.openURL(lastfmProfileUrl);
+                  }}
+                >
+                  <Text style={styles.lastFmButtonText}>View on Last.fm</Text>
+                  <Ionicons name="open-outline" size={16} color="#fff" style={{marginLeft: 8}} />
+                </TouchableOpacity>
+              );
+            }
+            return null;
+          }}
           contentContainerStyle={styles.bottomSheetContent}
         />
       </BottomSheet>
+
+
     </View>
   );
 };
+
+
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -466,6 +620,57 @@ const styles = StyleSheet.create({
     borderColor: "#121212",
   },
   badgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "bold" },
+  
+
+  arrowIcon: { marginLeft: 10 },
+  
+  // History Item Styles
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  historyImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  historyPlaceholder: {
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyTrack: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'AvenirNextLTPro-Bold',
+  },
+  historyArtist: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
+    fontFamily: 'AvenirNextLTPro-Regular',
+  },
+  lastFmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    backgroundColor: '#D92323',
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  lastFmButtonText: {
+    color: '#fff',
+    fontFamily: 'AvenirNextLTPro-Bold',
+    fontSize: 14,
+  },
 });
 
 export default MapViewComponent;

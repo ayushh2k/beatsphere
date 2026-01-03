@@ -1,6 +1,7 @@
 // app/(tabs)/home.tsx
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Text,
   View,
@@ -26,6 +27,7 @@ import {
 import SongCard, { LastFmTrack } from "@/components/SongCard";
 import AlbumCard from "@/components/AlbumCard";
 import WeeklyReportCard from "@/components/WeeklyReportCard";
+import analytics from "../../utils/analytics";
 
 const useLastFmHomeData = () => {
   const [userInfo, setUserInfo] = useState<any>(null);
@@ -129,6 +131,12 @@ const Home = () => {
     error,
     refresh,
   } = useLastFmHomeData();
+
+  useFocusEffect(
+    useCallback(() => {
+      analytics.trackScreenView('home');
+    }, [])
+  );
 
   if (loading && !userInfo) {
     return (

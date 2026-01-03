@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
@@ -116,6 +117,14 @@ const DrawerContent = ({ closeDrawer }: { closeDrawer: () => void }) => {
 
       {/* Actions & Links Section */}
       <View style={styles.actionsSection}>
+        <DrawerItem
+          icon="analytics-outline"
+          label="Remapped 2025"
+          onPress={() => {
+            closeDrawer();
+            router.push('/remapped' as any);
+          }}
+        />
         <DrawerItem
           icon="share-social-outline"
           label="Share BeatSphere"

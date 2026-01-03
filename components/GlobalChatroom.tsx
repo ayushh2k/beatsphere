@@ -20,6 +20,7 @@ import { filterCurseWords } from '../utils/curseWordFilter';
 import ChatProfileCallout from './ChatProfileCallout';
 import GifPicker from './GifPicker';
 import GifMessage from './GifMessage';
+import analytics from '../utils/analytics';
 
 // --- Type Definitions ---
 interface Message {
@@ -46,7 +47,8 @@ interface UserInfo {
 }
 
 // --- Constants ---
-const WEBSOCKET_URL = 'wss://beatsphere-backend.onrender.com/chat';
+const WEBSOCKET_URL = 'wss://api.beatsphere.live/chat';
+// const WEBSOCKET_URL = 'wss://beatsphere-backend.onrender.com/chat';
 // const WEBSOCKET_URL = 'wss://backend-beatsphere.onrender.com/chat';
 // const WEBSOCKET_URL = 'ws://192.168.1.6:3000/chat';
 
@@ -159,10 +161,10 @@ const GlobalChatroom = () => {
       setConnectionStatus('connected');
       addSystemMessage('Connection established. Welcome! ✅');
       ws.current?.send(JSON.stringify({
-        type: 'join',
-        senderId: userInfoRef.current!.id,
-        senderName: userInfoRef.current!.name,
-        senderImage: userInfoRef.current!.image,
+        event: 'join',
+        data: {
+          username: userInfoRef.current!.id,
+        }
       }));
       if (messageQueueRef.current) {
         sendMessage(messageQueueRef.current);
@@ -171,17 +173,59 @@ const GlobalChatroom = () => {
     };
 
     ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      switch (data.type) {
+      const message = JSON.parse(event.data);
+      const eventType = message.event || message.type;
+
+      switch (eventType) {
+        case 'history':
+          // Initial chat history - array of messages
+          const historyMessages = Array.isArray(message.data) ? message.data : message;
+          const mappedHistory = historyMessages.map((msg: any) => ({
+            id: msg.id?.toString() || Date.now().toString(),
+            senderId: msg.username || msg.senderId || msg.userId?.toString(),
+            senderName: msg.username || msg.senderName,
+            senderImage: msg.profilePic || msg.senderImage,
+            text: filterCurseWords(msg.content || msg.text),
+            timestamp: new Date(msg.createdAt || msg.timestamp).getTime(),
+          }));
+          setMessages(mappedHistory);
+          break;
+
         case 'globalMessage':
-          setMessages(prev => [...prev, { ...data, text: filterCurseWords(data.text) }]);
+          // New incoming message
+          const newMsg = message.data || message;
+          setMessages(prev => [...prev, {
+            id: newMsg.id?.toString() || Date.now().toString(),
+            senderId: newMsg.username || newMsg.senderId || newMsg.userId?.toString(),
+            senderName: newMsg.username || newMsg.senderName,
+            senderImage: newMsg.profilePic || newMsg.senderImage,
+            text: filterCurseWords(newMsg.content || newMsg.text),
+            timestamp: new Date(newMsg.createdAt || newMsg.timestamp).getTime(),
+          }]);
           break;
-        case 'userCountUpdate':
-          setOnlineCount(data.count);
+
+        case 'active_users':
+          // List of online users
+          const activeUsers = message.data || message;
+          setOnlineCount(Array.isArray(activeUsers) ? activeUsers.length : 0);
           break;
+
         case 'typingUpdate':
-          const { users = [] } = data;
-          const otherTypers = users.filter((typer: UserInfo) => typer.id !== userInfoRef.current?.id);
+          // Typing indicator updates
+          const typingData = message.data || message;
+          let otherTypers: UserInfo[] = [];
+
+          // Format A: { users: [...] }
+          if (typingData.users && Array.isArray(typingData.users)) {
+            otherTypers = typingData.users.filter((typer: UserInfo) => typer.id !== userInfoRef.current?.id);
+          }
+          // Format B: { isTyping: bool, user: {...} }
+          else if (typingData.isTyping && typingData.user) {
+            if (typingData.user.id !== userInfoRef.current?.id) {
+              otherTypers = [typingData.user];
+            }
+          }
+
           let indicatorMessage = '';
           if (otherTypers.length === 1) {
             indicatorMessage = `${otherTypers[0].name} is typing...`;
@@ -217,7 +261,18 @@ const GlobalChatroom = () => {
     if (!userInfoRef.current) return;
     if (ws.current?.readyState === WebSocket.OPEN) {
       const filteredText = filterCurseWords(text.trim());
-      ws.current.send(JSON.stringify({ type: 'message', text: filteredText }));
+      ws.current.send(JSON.stringify({
+        event: 'message',
+        data: {
+          content: filteredText,
+          username: userInfoRef.current.id,
+        }
+      }));
+
+      // Track chat message analytics
+      const isGif = text.startsWith('https://') && text.endsWith('.gif');
+      analytics.trackChatMessage(isGif ? 'gif' : 'text', 'global');
+
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       sendTyping(false);
     } else {
@@ -230,8 +285,17 @@ const GlobalChatroom = () => {
   };
 
   const sendTyping = (isTyping: boolean) => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type: 'typing', isTyping }));
+    if (ws.current?.readyState === WebSocket.OPEN && userInfoRef.current) {
+      ws.current.send(JSON.stringify({
+        event: 'typing',
+        data: {
+          isTyping,
+          user: {
+            id: userInfoRef.current.id,
+            name: userInfoRef.current.name,
+          }
+        }
+      }));
     }
   };
 
@@ -249,25 +313,27 @@ const GlobalChatroom = () => {
     if (item.isSystemMessage) {
       return <View style={styles.systemMessageContainer}><Text style={styles.systemMessageText}>{item.text}</Text></View>;
     }
-    const isOwnMessage = item.senderId === userInfoRef.current?.id;
+    // Check both senderId and senderName to handle different response formats
+    const isOwnMessage = item.senderId === userInfoRef.current?.id || item.senderName === userInfoRef.current?.id;
     const isGif = item.text.startsWith('https://') && item.text.endsWith('.gif');
 
-    // --- RENDER LOGIC FOR YOUR OWN MESSAGES ---
+    // --- RENDER LOGIC FOR YOUR OWN MESSAGES (Right-aligned, Red bubble, No avatar) ---
     if (isOwnMessage) {
       return (
-        <View style={[styles.messageBubble, styles.ownMessage, isGif && styles.gifBubble]}>
-          {isGif ? (
-            <View>
-              {/* <Image source={{ uri: item.text }} style={styles.gifImage} contentFit="cover" /> */}
-              <GifMessage uri={item.text} />
-              <Text style={styles.gifTimestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.messageText}>{item.text}</Text>
-              <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
-            </>
-          )}
+        <View style={styles.ownMessageWrapper}>
+          <View style={[styles.messageBubble, styles.ownMessage, isGif && styles.gifBubble]}>
+            {isGif ? (
+              <View>
+                <GifMessage uri={item.text} />
+                <Text style={styles.gifTimestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.messageText}>{item.text}</Text>
+                <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+              </>
+            )}
+          </View>
         </View>
       );
     }
@@ -410,11 +476,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 18,
   },
-  ownMessage: { 
-    alignSelf: 'flex-end', 
-    backgroundColor: '#D92323', 
-    borderBottomRightRadius: 5,
+  ownMessageWrapper: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     marginVertical: 4,
+  },
+  ownMessage: {
+    backgroundColor: '#D92323',
+    borderBottomRightRadius: 5,
     maxWidth: '80%',
   },
   otherMessage: { 

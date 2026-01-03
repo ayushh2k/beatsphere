@@ -1,6 +1,7 @@
 // app/(tabs)/profile.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   Text, 
   View, 
@@ -18,6 +19,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getUserInfo } from '../../utils/lastFmHelpers';
+import analytics from '../../utils/analytics';
 
 interface LastFmUser {
   name: string;
@@ -82,8 +84,17 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      analytics.trackScreenView('profile');
+    }, [])
+  );
+
   const handleLogout = async () => {
     try {
+      // Track logout event before clearing data
+      await analytics.trackLogout();
+
       await Promise.all([
         // SecureStore items
         SecureStore.deleteItemAsync('lastfm_session_key'),
@@ -145,11 +156,16 @@ const Profile = () => {
         </View>
 
         <View style={styles.actionsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/remapped')}>
+                <Ionicons name="analytics-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.actionButtonText}>View Remapped 2025</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
                 <Ionicons name="open-outline" size={16} color="#FFFFFF" />
                 <Text style={styles.actionButtonText}>View Profile on Last.fm</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
                 <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
                 <Text style={styles.actionButtonText}>Logout</Text>

@@ -5,7 +5,7 @@ import { stringMd5 } from 'react-native-quick-md5';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const LASTFM_API_URL = 'http://ws.audioscrobbler.com/2.0/';
+const LASTFM_API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
 export const getMobileSession = async (token: string, apiKey: string, sharedSecret: string) => {
   const method = 'auth.getSession';
@@ -87,7 +87,7 @@ export const getListeningStatus = async (apiKey: string, sessionKey: string, use
   try {
     const response = await axios.get(LASTFM_API_URL, { params });
     const recentTracks = response.data.recenttracks;
-    
+
     const track = Array.isArray(recentTracks?.track) ? recentTracks.track[0] : recentTracks?.track;
 
     if (!track) {
@@ -213,51 +213,51 @@ export const getTopAlbums = async (apiKey: string, sessionKey: string, username:
 };
 
 const getUserCredentials = async () => {
-    const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY;
-    const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
-    const username = await SecureStore.getItemAsync('lastfm_username');
-    if (!apiKey || !sessionKey || !username) {
-        throw new Error('User credentials not found.');
-    }
-    return { apiKey, sessionKey, username };
+  const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY;
+  const sessionKey = await SecureStore.getItemAsync('lastfm_session_key');
+  const username = await SecureStore.getItemAsync('lastfm_username');
+  if (!apiKey || !sessionKey || !username) {
+    throw new Error('User credentials not found.');
+  }
+  return { apiKey, sessionKey, username };
 };
 
 export const getWeeklyReport = async () => {
-    const { apiKey, sessionKey, username } = await getUserCredentials();
-    
-    const chartListParams = { method: 'user.getWeeklyChartList', user: username, api_key: apiKey, format: 'json' };
-    const chartListResponse = await axios.get(LASTFM_API_URL, { params: chartListParams });
-    const latestChart = chartListResponse.data.weeklychartlist.chart.pop();
-    
-    if (!latestChart) {
-        return null;
+  const { apiKey, sessionKey, username } = await getUserCredentials();
+
+  const chartListParams = { method: 'user.getWeeklyChartList', user: username, api_key: apiKey, format: 'json' };
+  const chartListResponse = await axios.get(LASTFM_API_URL, { params: chartListParams });
+  const latestChart = chartListResponse.data.weeklychartlist.chart.pop();
+
+  if (!latestChart) {
+    return null;
+  }
+
+  const weeklyArtistParams = {
+    method: 'user.getWeeklyArtistChart',
+    user: username,
+    api_key: apiKey,
+    from: latestChart.from,
+    to: latestChart.to,
+    format: 'json'
+  };
+  const artistChartResponse = await axios.get(LASTFM_API_URL, { params: weeklyArtistParams });
+  const artists = artistChartResponse.data.weeklyartistchart.artist;
+
+  if (!artists || artists.length === 0) {
+    return null;
+  }
+
+  const totalScrobbles = artists.reduce((sum: number, artist: any) => sum + parseInt(artist.playcount, 10), 0);
+  const topArtist = artists[0];
+
+  return {
+    totalScrobbles,
+    uniqueArtists: artists.length,
+    topArtist: {
+      name: topArtist.name,
     }
-
-    const weeklyArtistParams = {
-        method: 'user.getWeeklyArtistChart',
-        user: username,
-        api_key: apiKey,
-        from: latestChart.from,
-        to: latestChart.to,
-        format: 'json'
-    };
-    const artistChartResponse = await axios.get(LASTFM_API_URL, { params: weeklyArtistParams });
-    const artists = artistChartResponse.data.weeklyartistchart.artist;
-
-    if (!artists || artists.length === 0) {
-        return null;
-    }
-
-    const totalScrobbles = artists.reduce((sum: number, artist: any) => sum + parseInt(artist.playcount, 10), 0);
-    const topArtist = artists[0];
-
-    return {
-        totalScrobbles,
-        uniqueArtists: artists.length,
-        topArtist: {
-            name: topArtist.name,
-        }
-    };
+  };
 };
 
 export interface LastFmTrack {
