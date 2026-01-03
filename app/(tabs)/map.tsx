@@ -5,9 +5,9 @@ import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 
-import MapViewComponent from '@/components/Map';
-import LocationConsentModal from '@/components/LocationConsentModal';
-import analytics from '../../utils/analytics';
+import { MapView } from '@/features/map';
+import { LocationConsentModal } from '@/components/modals';
+import analytics from '@/utils/analytics';
 
 const LOCATION_CONSENT_KEY = 'has_accepted_location_terms';
 
@@ -42,7 +42,7 @@ const MapScreen = () => {
     return <LocationConsentModal visible={true} onAccept={handleAcceptConsent} onDecline={handleDeclineConsent} />;
   }
 
-  return consentStatus === true ? <MapViewComponent /> : null;
+  return consentStatus === true ? <MapView /> : null;
 };
 
 const styles = StyleSheet.create({
