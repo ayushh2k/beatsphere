@@ -14,17 +14,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 
-import { getRemappedStats, RemappedStats } from '../utils/remappedHelpers';
-import { audioManager } from '../utils/audioManager';
-import RemappedLoadingScreen from '../components/RemappedLoadingScreen';
-import RemappedProgressBar from '../components/RemappedProgressBar';
-import RemappedIntroSlide from '../components/RemappedIntroSlide';
-import RemappedMinutesSlide from '../components/RemappedMinutesSlide';
-import RemappedGenreSlide from '../components/RemappedGenreSlide';
-import RemappedArtistsSlide from '../components/RemappedArtistsSlide';
-import RemappedTracksSlide from '../components/RemappedTracksSlide';
-import RemappedAlbumsSlide from '../components/RemappedAlbumsSlide';
-import RemappedSummarySlide from '../components/RemappedSummarySlide';
+import { audioManager } from '@/utils/audioManager';
+import {
+    LoadingScreen,
+    ProgressBar,
+    IntroSlide,
+    MinutesSlide,
+    GenreSlide,
+    ArtistsSlide,
+    TracksSlide,
+    AlbumsSlide,
+    SummarySlide,
+    useRemappedStats,
+    type RemappedStats,
+} from '@/features/remapped';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -156,7 +159,7 @@ export default function RemappedScreen() {
         return (
             <>
                 <Stack.Screen options={{ headerShown: false }} />
-                <RemappedLoadingScreen />
+                <LoadingScreen />
             </>
         );
     }
@@ -242,13 +245,13 @@ export default function RemappedScreen() {
     if (!stats) return null;
 
     const slides = [
-        { id: 0, component: <RemappedIntroSlide onStart={startJourney} /> },
-        { id: 1, component: <RemappedMinutesSlide minutes={stats.totalMinutes} /> },
-        { id: 2, component: <RemappedGenreSlide genre={stats.topGenre} /> },
-        { id: 3, component: <RemappedArtistsSlide artists={stats.topArtists} /> },
-        { id: 4, component: <RemappedTracksSlide tracks={stats.topTracks} /> },
-        { id: 5, component: <RemappedAlbumsSlide albums={stats.topAlbums} /> },
-        { id: 6, component: <RemappedSummarySlide stats={stats} onReplay={() => goToSlide(0)} /> },
+        { id: 0, component: <IntroSlide onStart={startJourney} /> },
+        { id: 1, component: <MinutesSlide minutes={stats.totalMinutes} /> },
+        { id: 2, component: <GenreSlide genre={stats.topGenre} /> },
+        { id: 3, component: <ArtistsSlide artists={stats.topArtists} /> },
+        { id: 4, component: <TracksSlide tracks={stats.topTracks} /> },
+        { id: 5, component: <AlbumsSlide albums={stats.topAlbums} /> },
+        { id: 6, component: <SummarySlide stats={stats} onReplay={() => goToSlide(0)} /> },
     ];
 
     return (
@@ -256,7 +259,7 @@ export default function RemappedScreen() {
             <Stack.Screen options={{ headerShown: false }} />
             <SafeAreaView style={styles.container} edges={['top']}>
                 {/* Progress Bar */}
-                <RemappedProgressBar current={currentSlide} total={7} />
+                <ProgressBar current={currentSlide} total={7} />
 
                 {/* Slides */}
                 <FlatList

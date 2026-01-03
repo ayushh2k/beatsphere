@@ -29,6 +29,8 @@ export const queryKeys = {
       ['lastfm', 'userInfo', username] as const,
     weeklyReport: () =>
       ['lastfm', 'weeklyReport'] as const,
+    remappedStats: () =>
+      ['lastfm', 'remappedStats'] as const,
   },
 
   // Authentication queries
