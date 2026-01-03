@@ -3,4 +3,4 @@
  */
 
 export { default as DrawerContent } from './DrawerContent';
-export { default as TabBarIcon } from './TabBarIcon';
+export { TabBarIcon } from './TabBarIcon';

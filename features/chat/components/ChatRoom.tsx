@@ -23,16 +23,22 @@ export default function ChatRoom() {
 
   const { messages, addSystemMessage, handleMessagesUpdate } = useChatMessages();
 
+  // Create a ref to store handleTypingUpdate to avoid circular dependency
+  const handleTypingUpdateRef = React.useRef<(indicator: any) => void>(() => {});
+
   const { connectionStatus, sendMessage, sendTyping, userInfo } = useWebSocket({
     onMessagesUpdate: handleMessagesUpdate,
     onOnlineCountUpdate: setOnlineCount,
-    onTypingUpdate: handleTypingUpdate,
+    onTypingUpdate: (indicator) => handleTypingUpdateRef.current(indicator),
     onSystemMessage: addSystemMessage,
   });
 
   const { typingIndicator, handleTypingUpdate, handleInputChange, cleanup } = useTypingIndicator({
     sendTyping,
   });
+
+  // Update the ref
+  handleTypingUpdateRef.current = handleTypingUpdate;
 
   const handleSendPress = () => {
     if (!inputText.trim()) return;

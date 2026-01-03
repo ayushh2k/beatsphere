@@ -6,7 +6,7 @@ import { Easing } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LastFmItem } from '../utils/remappedHelpers';
+import { LastFmItem } from '@/utils/remappedHelpers';
 
 interface ArtistsSlideProps {
     artists: LastFmItem[];

@@ -2,8 +2,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import GlobalChatroom from '@/components/GlobalChatroom';
-import ChatScreen from '@/components/ChatScreen';
+import { ChatRoom as GlobalChatroom, ChatScreen } from '@/features/chat';
 
 type ChatRoomParams = {
   id: string;

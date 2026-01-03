@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 
 import { audioManager } from '@/utils/audioManager';
+import { getRemappedStats, type RemappedStats } from '@/utils/remappedHelpers';
 import {
     LoadingScreen,
     ProgressBar,
@@ -25,8 +26,6 @@ import {
     TracksSlide,
     AlbumsSlide,
     SummarySlide,
-    useRemappedStats,
-    type RemappedStats,
 } from '@/features/remapped';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
