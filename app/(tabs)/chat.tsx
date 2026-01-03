@@ -3,8 +3,8 @@
 import React, { useCallback } from 'react';
 import { StatusBar, View, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import GlobalChatroom from '../../components/GlobalChatroom';
-import analytics from '../../utils/analytics';
+import { ChatRoom } from '@/features/chat';
+import analytics from '@/utils/analytics';
 
 const ChatScreen = () => {
   useFocusEffect(
@@ -16,7 +16,7 @@ const ChatScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#121212"/>
-      <GlobalChatroom />
+      <ChatRoom />
     </View>
   );
 };
