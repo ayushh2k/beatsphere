@@ -4,7 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import analytics from '@/utils/analytics';
 import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
@@ -21,15 +24,30 @@ export default function ChatRoom() {
   const [isPickerVisible, setIsPickerVisible] = useState(false);
   const [inputText, setInputText] = useState('');
 
+  const headerHeight = useHeaderHeight();
+  // Safe access to tab bar height, defaulting to 0 if not available or hook fails in certain contexts
+  let tabBarHeight = 0;
+  try {
+    tabBarHeight = useBottomTabBarHeight();
+  } catch (e) {
+    // Ignore error if used outside tab navigator
+  }
+
+  const offset = Platform.OS === 'ios' ? headerHeight + tabBarHeight : headerHeight;
+
   const { messages, addSystemMessage, handleMessagesUpdate } = useChatMessages();
 
   // Create a ref to store handleTypingUpdate to avoid circular dependency
   const handleTypingUpdateRef = React.useRef<(indicator: any) => void>(() => {});
 
+  const onTypingUpdateStable = React.useCallback((indicator: any) => {
+    handleTypingUpdateRef.current(indicator);
+  }, []);
+
   const { connectionStatus, sendMessage, sendTyping, userInfo } = useWebSocket({
     onMessagesUpdate: handleMessagesUpdate,
     onOnlineCountUpdate: setOnlineCount,
-    onTypingUpdate: (indicator) => handleTypingUpdateRef.current(indicator),
+    onTypingUpdate: onTypingUpdateStable,
     onSystemMessage: addSystemMessage,
   });
 
@@ -63,7 +81,11 @@ export default function ChatRoom() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : offset}
+    >
       <ChatHeader connectionStatus={connectionStatus} onlineCount={onlineCount} />
 
       <MessageList
@@ -73,19 +95,15 @@ export default function ChatRoom() {
         onUserPress={setSelectedUser}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <TypingIndicator typingIndicator={typingIndicator} />
-        <ChatInput
-          inputText={inputText}
-          onInputChange={handleInputChangeWrapper}
-          onSendPress={handleSendPress}
-          onGifPress={handleGifPress}
-          connectionStatus={connectionStatus}
-        />
-      </KeyboardAvoidingView>
+      <TypingIndicator typingIndicator={typingIndicator} />
+      
+      <ChatInput
+        inputText={inputText}
+        onInputChange={handleInputChangeWrapper}
+        onSendPress={handleSendPress}
+        onGifPress={handleGifPress}
+        connectionStatus={connectionStatus}
+      />
 
       <ChatProfileCallout
         user={selectedUser}
@@ -97,7 +115,7 @@ export default function ChatRoom() {
         onSelectGif={handleSelectGif}
         onClose={() => setIsPickerVisible(false)}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

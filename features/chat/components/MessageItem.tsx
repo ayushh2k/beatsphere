@@ -16,7 +16,7 @@ interface MessageItemProps {
   onUserPress: (message: Message) => void;
 }
 
-export default function MessageItem({ message, isOwnMessage, onUserPress }: MessageItemProps) {
+const MessageItem = React.memo(function MessageItem({ message, isOwnMessage, onUserPress }: MessageItemProps) {
   // System messages
   if (message.isSystemMessage) {
     return (
@@ -108,7 +108,9 @@ export default function MessageItem({ message, isOwnMessage, onUserPress }: Mess
       </View>
     </View>
   );
-}
+});
+
+export default MessageItem;
 
 const styles = StyleSheet.create({
   systemMessageContainer: {

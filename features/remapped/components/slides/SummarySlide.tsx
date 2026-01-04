@@ -129,7 +129,7 @@ const RemappedSummarySlide = ({ stats, onReplay }: SummarySlideProps) => {
                             {/* Badge */}
                             <View style={styles.badge}>
                                 <Image
-                                    source={require('../assets/images/logo.jpg')}
+                                    source={require('../../../../assets/images/logo.jpg')}
                                     style={styles.badgeLogo}
                                     contentFit="cover"
                                 />

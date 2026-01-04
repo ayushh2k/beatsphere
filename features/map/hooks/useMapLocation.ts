@@ -12,25 +12,31 @@ export function useMapLocation() {
 
   useEffect(() => {
     const initialize = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setPermissionDenied(true);
-        return;
-      }
-
-      const initialLocation = await Location.getCurrentPositionAsync({});
-      latestLocationRef.current = initialLocation;
-
-      Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 60000, // Update every minute
-          distanceInterval: 100, // Or every 100 meters
-        },
-        (location) => {
-          latestLocationRef.current = location;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setPermissionDenied(true);
+          return;
         }
-      );
+
+        const initialLocation = await Location.getCurrentPositionAsync({});
+        latestLocationRef.current = initialLocation;
+
+        await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 60000, // Update every minute
+            distanceInterval: 100, // Or every 100 meters
+          },
+          (location) => {
+            latestLocationRef.current = location;
+          }
+        );
+      } catch (error) {
+        console.warn('Location service error:', error);
+        // If location is unavailable (e.g. GPS off), we just don't get updates.
+        // We could set a state here if we wanted to show a UI warning.
+      }
     };
 
     initialize();

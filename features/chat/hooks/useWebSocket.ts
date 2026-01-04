@@ -23,27 +23,56 @@ export function useWebSocket({
   onSystemMessage,
 }: UseWebSocketProps) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  
+  // Keep latest callbacks in a ref to avoid dependencies in 'connect'
+  const callbacksRef = useRef({
+    onMessagesUpdate,
+    onOnlineCountUpdate,
+    onTypingUpdate,
+    onSystemMessage,
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onMessagesUpdate,
+      onOnlineCountUpdate,
+      onTypingUpdate,
+      onSystemMessage,
+    };
+  }, [onMessagesUpdate, onOnlineCountUpdate, onTypingUpdate, onSystemMessage]);
+
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageQueueRef = useRef<string | null>(null);
   const userInfoRef = useRef<UserInfo | null>(null);
   const sessionKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const connect = useCallback((retryCount: number) => {
     const sessionKey = sessionKeyRef.current;
     if (!userInfoRef.current || !sessionKey || ws.current?.readyState === WebSocket.OPEN) return;
 
     setConnectionStatus(retryCount === 0 ? 'connecting' : 'reconnecting');
+    const { onSystemMessage, onMessagesUpdate, onOnlineCountUpdate, onTypingUpdate } = callbacksRef.current;
+
     const message =
       retryCount === 0 ? 'Connecting to chat... 📡' : 'Connection lost. Reconnecting... 🔌';
     onSystemMessage(message);
 
-    const authenticatedUrl = `${API_ENDPOINTS.WEBSOCKET}/chat?token=${sessionKey}`;
+    const authenticatedUrl = `${API_ENDPOINTS.WEBSOCKET}?token=${sessionKey}`;
     ws.current = new WebSocket(authenticatedUrl);
 
     ws.current.onopen = () => {
+      if (!isMountedRef.current) return;
       setConnectionStatus('connected');
-      onSystemMessage('Connection established. Welcome! ✅');
+      callbacksRef.current.onSystemMessage('Connection established. Welcome! ✅');
       ws.current?.send(
         JSON.stringify({
           event: 'join',
@@ -58,13 +87,23 @@ export function useWebSocket({
       }
     };
 
+    ws.current.onerror = (e) => {
+      if (!isMountedRef.current) return;
+      // Extract meaningful error message if possible
+      const errorMessage = (e as any).message || 'Unknown WebSocket error';
+      console.error('WebSocket Error:', errorMessage, e);
+      callbacksRef.current.onSystemMessage(`Connection error: ${errorMessage} ⚠️`);
+    };
+
     ws.current.onmessage = (event) => {
+      if (!isMountedRef.current) return;
       const message = JSON.parse(event.data);
       const eventType = message.event || message.type;
+      
+      const { onMessagesUpdate, onOnlineCountUpdate, onTypingUpdate } = callbacksRef.current;
 
       switch (eventType) {
         case 'history':
-          // Initial chat history - array of messages
           const historyMessages = Array.isArray(message.data) ? message.data : message;
           const mappedHistory = historyMessages.map((msg: any) => ({
             id: msg.id?.toString() || Date.now().toString(),
@@ -78,7 +117,6 @@ export function useWebSocket({
           break;
 
         case 'globalMessage':
-          // New incoming message
           const newMsg = message.data || message;
           const formattedMsg: Message = {
             id: newMsg.id?.toString() || Date.now().toString(),
@@ -92,24 +130,19 @@ export function useWebSocket({
           break;
 
         case 'active_users':
-          // List of online users
           const activeUsers = message.data || message;
           onOnlineCountUpdate(Array.isArray(activeUsers) ? activeUsers.length : 0);
           break;
 
         case 'typingUpdate':
-          // Typing indicator updates
           const typingData = message.data || message;
           let otherTypers: UserInfo[] = [];
 
-          // Format A: { users: [...] }
           if (typingData.users && Array.isArray(typingData.users)) {
             otherTypers = typingData.users.filter(
               (typer: UserInfo) => typer.id !== userInfoRef.current?.id
             );
-          }
-          // Format B: { isTyping: bool, user: {...} }
-          else if (typingData.isTyping && typingData.user) {
+          } else if (typingData.isTyping && typingData.user) {
             if (typingData.user.id !== userInfoRef.current?.id) {
               otherTypers = [typingData.user];
             }
@@ -127,13 +160,13 @@ export function useWebSocket({
     };
 
     ws.current.onclose = () => {
-      onTypingUpdate({ isTyping: false, message: '' });
-      if (connectionStatus !== 'disconnected') {
-        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Exponential backoff
-        reconnectTimeoutRef.current = setTimeout(() => connect(retryCount + 1), delay);
-      }
+      if (!isMountedRef.current) return;
+      callbacksRef.current.onTypingUpdate({ isTyping: false, message: '' });
+      
+      const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+      reconnectTimeoutRef.current = setTimeout(() => connect(retryCount + 1), delay);
     };
-  }, [connectionStatus, onMessagesUpdate, onOnlineCountUpdate, onSystemMessage, onTypingUpdate]);
+  }, []); // Only simple, stable dependencies (effectively none needed here as we use refs)
 
   const initializeUserAndConnect = useCallback(async () => {
     try {
@@ -143,7 +176,7 @@ export function useWebSocket({
       const sessionKey = await SecureStore.getItemAsync(STORAGE_KEYS.LASTFM_SESSION);
 
       if (!id || !name || !sessionKey) {
-        onSystemMessage('Could not start chat. User credentials not found. ❌');
+        callbacksRef.current.onSystemMessage('Could not start chat. User credentials not found. ❌');
         setConnectionStatus('disconnected');
         return;
       }
@@ -153,15 +186,19 @@ export function useWebSocket({
       connect(0);
     } catch (error) {
       console.error('Failed to get user info:', error);
-      onSystemMessage('An error occurred while fetching your user data.');
+      callbacksRef.current.onSystemMessage('An error occurred while fetching your user data.');
     }
-  }, [connect, onSystemMessage]);
+  }, [connect]);
 
   useEffect(() => {
+    // Only verify we have what we need, then run once
     initializeUserAndConnect();
+    
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       ws.current?.close();
+      // Important: clear onclose to prevents reconnect attempt after unmount
+      if (ws.current) ws.current.onclose = null;
     };
   }, [initializeUserAndConnect]);
 
@@ -180,12 +217,13 @@ export function useWebSocket({
       );
     } else {
       messageQueueRef.current = text;
-      onSystemMessage('Message queued. Will send upon reconnection.');
-      if (connectionStatus !== 'reconnecting' && connectionStatus !== 'connecting') {
-        connect(0);
+      callbacksRef.current.onSystemMessage('Message queued. Will send upon reconnection.');
+      // If disconnected, try to reconnect immediately (reset retry count)
+      if (ws.current?.readyState !== WebSocket.OPEN && ws.current?.readyState !== WebSocket.CONNECTING) {
+          connect(0);
       }
     }
-  }, [connect, connectionStatus, onSystemMessage]);
+  }, [connect]);
 
   const sendTyping = useCallback((isTyping: boolean) => {
     if (ws.current?.readyState === WebSocket.OPEN && userInfoRef.current) {

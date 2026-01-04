@@ -11,7 +11,7 @@ export function useChatMessages() {
 
   const addSystemMessage = useCallback((text: string, idPrefix = 'system') => {
     const systemMessage: Message = {
-      id: `${idPrefix}-${Date.now()}`,
+      id: `${idPrefix}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       senderId: 'system',
       senderName: 'System',
       text,
