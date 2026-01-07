@@ -34,7 +34,7 @@ const RemappedIntroSlide = ({ onStart }: IntroSlideProps) => {
                 <View style={styles.logoContainer}>
                     <View style={styles.logoGlow} />
                     <Image
-                        source={require('../assets/images/logo.jpg')}
+                        source={require('../../../../assets/images/logo.jpg')}
                         style={styles.logoImage}
                         contentFit="cover"
                     />

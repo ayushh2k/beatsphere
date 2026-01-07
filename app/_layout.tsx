@@ -6,7 +6,10 @@ import { useEffect } from "react";
 import { Buffer } from "buffer";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/config/queryClient";
 import analytics from "../utils/analytics";
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 global.Buffer = Buffer;
 
@@ -43,36 +46,40 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" backgroundColor="#121212" />
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: "#121212",
-          },
-          headerShown: false,
-          headerTintColor: "#ffff",
-          headerTitleAlign: "center",
-          headerTitleStyle: {
-            fontFamily: "AvenirNextLTPro-Bold",
-            fontSize: 24,
-            color: "#ffff",
-          },
-        }}
-      >
-        <Stack.Screen
-          options={{
-            title: "Beat Sphere",
-          }}
-          name="index"
-        />
-        <Stack.Screen
-          options={{
-            title: "Home",
-          }}
-          name="(tabs)"
-        />
-      </Stack>
-    </GestureHandlerRootView>
+    <QueryClientProvider client={queryClient}>
+      <KeyboardProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <StatusBar style="light" backgroundColor="#121212" />
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: "#121212",
+              },
+              headerShown: false,
+              headerTintColor: "#ffff",
+              headerTitleAlign: "center",
+              headerTitleStyle: {
+                fontFamily: "AvenirNextLTPro-Bold",
+                fontSize: 24,
+                color: "#ffff",
+              },
+            }}
+          >
+            <Stack.Screen
+              options={{
+                title: "Beat Sphere",
+              }}
+              name="index"
+            />
+            <Stack.Screen
+              options={{
+                title: "Home",
+              }}
+              name="(tabs)"
+            />
+          </Stack>
+        </GestureHandlerRootView>
+      </KeyboardProvider>
+    </QueryClientProvider>
   );
 }

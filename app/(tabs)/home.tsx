@@ -24,9 +24,8 @@ import {
   getWeeklyReport,
 } from "../../utils/lastFmHelpers";
 
-import SongCard, { LastFmTrack } from "@/components/SongCard";
-import AlbumCard from "@/components/AlbumCard";
-import WeeklyReportCard from "@/components/WeeklyReportCard";
+import { SongCard, AlbumCard, WeeklyReportCard } from '@/components/cards';
+import type { LastFmTrack } from '@/lib/lastfm';
 import analytics from "../../utils/analytics";
 
 const useLastFmHomeData = () => {

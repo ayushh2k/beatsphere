@@ -5,7 +5,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { View, StyleSheet, TouchableOpacity, Modal } from "react-native";
 import "../../global.css";
-import DrawerContent from "@/components/DrawerContent";
+import { DrawerContent } from '@/components/navigation';
 
 const TabsLayout = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);

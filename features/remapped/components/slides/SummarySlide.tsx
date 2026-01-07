@@ -11,7 +11,7 @@ import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import { router } from 'expo-router';
 import { cacheDirectory, deleteAsync, moveAsync } from 'expo-file-system/legacy';
-import { RemappedStats } from '../utils/remappedHelpers';
+import { RemappedStats } from '@/utils/remappedHelpers';
 
 interface SummarySlideProps {
     stats: RemappedStats;
@@ -129,7 +129,7 @@ const RemappedSummarySlide = ({ stats, onReplay }: SummarySlideProps) => {
                             {/* Badge */}
                             <View style={styles.badge}>
                                 <Image
-                                    source={require('../assets/images/logo.jpg')}
+                                    source={require('../../../../assets/images/logo.jpg')}
                                     style={styles.badgeLogo}
                                     contentFit="cover"
                                 />

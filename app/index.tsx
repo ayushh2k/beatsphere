@@ -11,77 +11,10 @@ import { Image, MotiView } from "moti";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
-import LoginWithLastFM from "@/components/LoginWithLastFM";
-import { getMobileSession, getUserInfo } from "../utils/lastFmHelpers";
-import analytics from "../utils/analytics";
-
-const useLastFmAuth = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null means "checking"
-  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
-
-  useEffect(() => {
-    const checkInitialLogin = async () => {
-      const sessionKey = await SecureStore.getItemAsync("lastfm_session_key");
-      if (sessionKey) {
-        setIsLoggedIn(true);
-      } else {
-        setIsLoggedIn(false);
-      }
-    };
-
-    const handleDeepLink = async ({ url }: { url: string }) => {
-      const token = new URL(url).searchParams.get("token");
-      if (token) {
-        setIsProcessingAuth(true);
-        try {
-          const apiKey = process.env.EXPO_PUBLIC_LASTFM_KEY!;
-          const sharedSecret = process.env.EXPO_PUBLIC_LASTFM_SECRET!;
-          const sessionKey = await getMobileSession(
-            token,
-            apiKey,
-            sharedSecret
-          );
-          const userInfo = await getUserInfo(apiKey, sessionKey);
-
-          await SecureStore.setItemAsync("lastfm_username", userInfo.name);
-          await SecureStore.setItemAsync("lastfm_session_key", sessionKey);
-
-          // Link user to analytics session and track login
-          await analytics.linkUser(userInfo.name);
-          await analytics.trackLogin(userInfo.name);
-
-          setIsLoggedIn(true);
-        } catch (error) {
-          console.error("Failed to process Last.fm auth token:", error);
-          setIsProcessingAuth(false);
-        }
-      }
-    };
-
-    checkInitialLogin();
-
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleDeepLink({ url });
-      }
-    });
-
-    const subscription = Linking.addEventListener("url", handleDeepLink);
-
-    return () => subscription.remove();
-  }, []);
-
-  useEffect(() => {
-    if (isLoggedIn === true) {
-      router.replace("/(tabs)/home");
-    }
-  }, [isLoggedIn]);
-
-  return { isLoggedIn, isProcessingAuth };
-};
+import { LoginWithLastFM, useAuth } from '@/features/auth';
 
 export default function Index() {
-  const { isLoggedIn, isProcessingAuth } = useLastFmAuth();
+  const { isLoggedIn, isProcessingAuth } = useAuth();
 
   if (isLoggedIn === null) {
     return <View style={styles.container} />;

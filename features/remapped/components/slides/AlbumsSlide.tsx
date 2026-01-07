@@ -1,4 +1,4 @@
-// components/RemappedTracksSlide.tsx
+// components/RemappedAlbumsSlide.tsx
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { MotiView } from 'moti';
@@ -6,13 +6,13 @@ import { Easing } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LastFmItem } from '../utils/remappedHelpers';
+import { LastFmItem } from '@/utils/remappedHelpers';
 
-interface TracksSlideProps {
-    tracks: LastFmItem[];
+interface AlbumsSlideProps {
+    albums: LastFmItem[];
 }
 
-const RemappedTracksSlide = ({ tracks }: TracksSlideProps) => {
+const RemappedAlbumsSlide = ({ albums }: AlbumsSlideProps) => {
     return (
         <View style={styles.container}>
             {/* Header */}
@@ -25,19 +25,19 @@ const RemappedTracksSlide = ({ tracks }: TracksSlideProps) => {
                     colors={['#D51007', '#EA580C']}
                     style={styles.iconBadge}
                 >
-                    <Ionicons name="musical-notes" size={32} color="#FFFFFF" />
+                    <Ionicons name="disc" size={32} color="#FFFFFF" />
                 </LinearGradient>
-                <Text style={styles.subtitle}>ON REPEAT</Text>
-                <Text style={styles.title}>Top Tracks</Text>
+                <Text style={styles.subtitle}>RECORD COLLECTION</Text>
+                <Text style={styles.title}>Top Albums</Text>
             </MotiView>
 
             {/* List */}
             <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
-                {tracks.slice(0, 5).map((track, index) => {
-                    const artistName = typeof track.artist === 'string' ? track.artist : track.artist?.name;
+                {albums.slice(0, 5).map((album, index) => {
+                    const artistName = typeof album.artist === 'string' ? album.artist : album.artist?.name;
                     return (
                         <MotiView
-                            key={track.name}
+                            key={album.name}
                             from={{ translateX: -50, opacity: 0 }}
                             animate={{ translateX: 0, opacity: 1 }}
                             delay={index * 150}
@@ -68,12 +68,12 @@ const RemappedTracksSlide = ({ tracks }: TracksSlideProps) => {
                                 )}
 
                                 {/* Image */}
-                                <TrackImage image={track.image?.[2]?.['#text']} />
+                                <AlbumImage image={album.image?.[2]?.['#text']} />
 
                                 {/* Info */}
-                                <View style={styles.trackInfo}>
-                                    <Text style={styles.trackName} numberOfLines={1}>
-                                        {track.name}
+                                <View style={styles.albumInfo}>
+                                    <Text style={styles.albumName} numberOfLines={1}>
+                                        {album.name}
                                     </Text>
                                     <Text style={styles.artistName} numberOfLines={1}>
                                         {artistName}
@@ -82,7 +82,7 @@ const RemappedTracksSlide = ({ tracks }: TracksSlideProps) => {
 
                                 {/* Playcount */}
                                 <Text style={styles.playcount}>
-                                    {parseInt(track.playcount || '0').toLocaleString()} plays
+                                    {parseInt(album.playcount || '0').toLocaleString()} plays
                                 </Text>
                             </LinearGradient>
                         </MotiView>
@@ -93,13 +93,13 @@ const RemappedTracksSlide = ({ tracks }: TracksSlideProps) => {
     );
 };
 
-const TrackImage = ({ image }: { image?: string }) => {
+const AlbumImage = ({ image }: { image?: string }) => {
     const [imageError, setImageError] = useState(false);
 
     if (!image || imageError) {
         return (
             <View style={styles.placeholderImage}>
-                <Ionicons name="musical-note" size={28} color="#4B5563" />
+                <Ionicons name="disc-outline" size={32} color="#4B5563" />
             </View>
         );
     }
@@ -107,7 +107,7 @@ const TrackImage = ({ image }: { image?: string }) => {
     return (
         <Image
             source={{ uri: image }}
-            style={styles.trackImage}
+            style={styles.albumImage}
             cachePolicy="disk"
             transition={300}
             onError={() => setImageError(true)}
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#6B7280',
     },
-    trackImage: {
+    albumImage: {
         width: 56,
         height: 56,
         borderRadius: 12,
@@ -209,11 +209,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(107, 114, 128, 0.3)',
     },
-    trackInfo: {
+    albumInfo: {
         flex: 1,
         marginRight: 12,
     },
-    trackName: {
+    albumName: {
         fontFamily: 'AvenirNextLTPro-Bold',
         fontSize: 16,
         color: '#FFFFFF',
@@ -231,4 +231,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default RemappedTracksSlide;
+export default RemappedAlbumsSlide;

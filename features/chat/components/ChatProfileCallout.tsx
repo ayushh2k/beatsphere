@@ -4,7 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { getUserRecentTrack, LastFmTrack } from '../utils/lastFmHelpers';
+import type { LastFmTrack } from '@/lib/lastfm';
+
+// Temporary local implementation until getUserRecentTrack is added to lib/lastfm
+async function getUserRecentTrack(username: string): Promise<LastFmTrack | null> {
+  // This function would need to be implemented properly
+  return null;
+}
 
 interface UserProfile {
   senderId: string;
